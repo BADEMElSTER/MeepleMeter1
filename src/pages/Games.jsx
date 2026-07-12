@@ -16,6 +16,7 @@ const initialForm = {
   catalogRating: null,
   catalogImage: null,
   catalogExpansions: [],
+  expansions: "",
 };
 
 const sortableColumns = [
@@ -26,6 +27,7 @@ const sortableColumns = [
   { key: "maxPlayers", label: "Max.", type: "number" },
   { key: "duration", label: "Vorgegebene Spielzeit", type: "number" },
   { key: "averagePlayedDuration", label: "Ø tatsächliche Spielzeit", type: "number" },
+  { key: "expansionCount", label: "Erweiterungen", type: "number" },
   { key: "plays", label: "Partien", type: "number" },
 ];
 
@@ -43,6 +45,7 @@ function getGameForm(game) {
     catalogRating: game.catalogRating ?? null,
     catalogImage: game.catalogImage ?? null,
     catalogExpansions: game.catalogExpansions ?? [],
+    expansions: (game.expansions ?? []).map((expansion) => expansion.name).join(", "),
   };
 }
 
@@ -108,6 +111,7 @@ export default function Games() {
       catalogRating: entry.rating,
       catalogImage: entry.image,
       catalogExpansions: entry.expansions ?? [],
+      expansions: (entry.expansions ?? []).map((expansion) => expansion.name).join(", "),
     });
     setFormMessage(`Katalogdaten für "${entry.name}" übernommen. Bitte prüfen und speichern.`);
   }
@@ -260,6 +264,13 @@ export default function Games() {
                 placeholder="60"
               />
             </Field>
+            <Field label="Erweiterungen optional">
+              <textarea
+                value={form.expansions}
+                onChange={(event) => updateField("expansions", event.target.value)}
+                placeholder="Eine Erweiterung pro Zeile oder mit Komma trennen"
+              />
+            </Field>
           </div>
           <button className="button" type="submit">
             {editingGameId ? "Änderungen speichern" : "Spiel speichern"}
@@ -311,6 +322,7 @@ export default function Games() {
                 <td>{game.maxPlayers}</td>
                 <td>{game.duration} Min.</td>
                 <td>{game.averagePlayedDuration ? `${game.averagePlayedDuration} Min.` : "–"}</td>
+                <td>{game.expansions?.length ? game.expansions.length : "–"}</td>
                 <td>{game.plays}</td>
                 <td>
                   <div className="table-actions">

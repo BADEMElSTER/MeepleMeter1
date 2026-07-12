@@ -55,6 +55,7 @@ function normalizeGame(game) {
     catalogRating: game.catalogRating ?? null,
     catalogImage: game.catalogImage ?? null,
     catalogExpansions: game.catalogExpansions ?? [],
+    expansions: game.expansions ?? game.catalogExpansions ?? [],
   };
 }
 
@@ -75,11 +76,27 @@ function buildGame(gameInput, existingGame = {}) {
     catalogRating: gameInput.catalogRating ?? existingGame.catalogRating ?? null,
     catalogImage: gameInput.catalogImage ?? existingGame.catalogImage ?? null,
     catalogExpansions: gameInput.catalogExpansions ?? existingGame.catalogExpansions ?? [],
+    expansions: parseExpansions(gameInput.expansions ?? existingGame.expansions ?? []),
   });
 }
 
 function normalizeTitle(title) {
   return title.trim().toLowerCase();
+}
+
+function parseExpansions(expansions) {
+  if (Array.isArray(expansions)) {
+    return expansions
+      .map((expansion) =>
+        typeof expansion === "string" ? { name: expansion.trim() } : { name: expansion.name?.trim() },
+      )
+      .filter((expansion) => expansion.name);
+  }
+
+  return String(expansions)
+    .split(/\n|,/)
+    .map((name) => ({ name: name.trim() }))
+    .filter((expansion) => expansion.name);
 }
 
 function buildPlay(playInput, games, existingPlay = {}) {
@@ -150,6 +167,7 @@ export function AppDataProvider({ children }) {
       return {
         ...game,
         plays: matchingPlays.length,
+        expansionCount: game.expansions?.length ?? 0,
         averagePlayedDuration: matchingPlays.length
           ? Math.round(totalGameDuration / matchingPlays.length)
           : null,
