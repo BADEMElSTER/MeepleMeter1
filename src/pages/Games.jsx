@@ -5,7 +5,8 @@ import { useAppData } from "../data/AppDataContext.jsx";
 const initialForm = {
   title: "",
   category: "",
-  players: "",
+  minPlayers: "1",
+  maxPlayers: "4",
   duration: "",
   rating: "",
 };
@@ -70,11 +71,22 @@ export default function Games() {
                 placeholder="Kennerspiel"
               />
             </Field>
-            <Field label="Spielerzahl">
+            <Field label="Min. Spieler">
               <input
-                value={form.players}
-                onChange={(event) => updateField("players", event.target.value)}
-                placeholder="2–6"
+                min="1"
+                type="number"
+                value={form.minPlayers}
+                onChange={(event) => updateField("minPlayers", event.target.value)}
+                placeholder="1"
+              />
+            </Field>
+            <Field label="Max. Spieler">
+              <input
+                min={form.minPlayers || 1}
+                type="number"
+                value={form.maxPlayers}
+                onChange={(event) => updateField("maxPlayers", event.target.value)}
+                placeholder="4"
               />
             </Field>
             <Field label="Dauer in Minuten">
@@ -110,7 +122,8 @@ export default function Games() {
             <tr>
               <th>Spiel</th>
               <th>Kategorie</th>
-              <th>Spieler</th>
+              <th>Min.</th>
+              <th>Max.</th>
               <th>Dauer</th>
               <th>Partien</th>
               <th>Rating</th>
@@ -123,7 +136,8 @@ export default function Games() {
                   <strong>{game.title}</strong>
                 </td>
                 <td>{game.category}</td>
-                <td>{game.players}</td>
+                <td>{game.minPlayers}</td>
+                <td>{game.maxPlayers}</td>
                 <td>{game.duration} Min.</td>
                 <td>{game.plays}</td>
                 <td>{game.rating.toFixed(1)}</td>

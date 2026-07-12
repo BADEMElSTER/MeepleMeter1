@@ -47,8 +47,20 @@ function buildPlay(playInput, games, existingPlay = {}) {
   };
 }
 
+function normalizeGame(game) {
+  const minPlayers = Number(game.minPlayers) || 1;
+  const maxPlayers = Math.max(Number(game.maxPlayers) || minPlayers, minPlayers);
+
+  return {
+    ...game,
+    minPlayers,
+    maxPlayers,
+    players: minPlayers === maxPlayers ? `${minPlayers}` : `${minPlayers}–${maxPlayers}`,
+  };
+}
+
 export function AppDataProvider({ children }) {
-  const [games, setGames] = useState(initialGames);
+  const [games, setGames] = useState(initialGames.map(normalizeGame));
   const [plays, setPlays] = useState(initialPlays);
 
   const stats = useMemo(() => {
@@ -82,13 +94,17 @@ export function AppDataProvider({ children }) {
       id: crypto.randomUUID(),
       title: gameInput.title.trim(),
       category: gameInput.category.trim() || "Nicht kategorisiert",
-      players: gameInput.players.trim() || "1+",
+      minPlayers: Number(gameInput.minPlayers) || 1,
+      maxPlayers: Math.max(
+        Number(gameInput.maxPlayers) || Number(gameInput.minPlayers) || 1,
+        Number(gameInput.minPlayers) || 1,
+      ),
       duration: Number(gameInput.duration) || 0,
       plays: 0,
       rating: Number(gameInput.rating) || 0,
     };
 
-    setGames((currentGames) => [game, ...currentGames]);
+    setGames((currentGames) => [normalizeGame(game), ...currentGames]);
   }
 
   function addPlay(playInput) {
