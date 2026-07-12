@@ -3,6 +3,50 @@ import { games as initialGames, plays as initialPlays } from "./mockData.js";
 
 const AppDataContext = createContext(null);
 
+function normalizeParticipants(participants = [], scoringMode = "none") {
+  return participants
+    .filter((participant) => participant.name.trim())
+    .map((participant) => ({
+      name: participant.name.trim(),
+      score: scoringMode === "none" ? null : Number(participant.score) || 0,
+    }));
+}
+
+function calculateWinner(participants, scoringMode, fallbackWinner = "") {
+  if (scoringMode === "none") {
+    return fallbackWinner.trim() || "Nicht erfasst";
+  }
+
+  if (!participants.length) {
+    return "Nicht erfasst";
+  }
+
+  const sortedParticipants = participants.toSorted((first, second) =>
+    scoringMode === "low" ? first.score - second.score : second.score - first.score,
+  );
+
+  return sortedParticipants[0]?.name ?? "Nicht erfasst";
+}
+
+function buildPlay(playInput, games, existingPlay = {}) {
+  const selectedGame = games.find((game) => game.id === playInput.gameId);
+  const scoringMode = playInput.scoringMode ?? "none";
+  const participants = normalizeParticipants(playInput.participants, scoringMode);
+
+  return {
+    ...existingPlay,
+    gameId: playInput.gameId,
+    game: selectedGame?.title ?? existingPlay.game ?? "Unbekanntes Spiel",
+    date: playInput.date,
+    players: participants.length || 1,
+    scoringMode,
+    participants,
+    winner: calculateWinner(participants, scoringMode, playInput.winner),
+    duration: Number(playInput.duration) || selectedGame?.duration || 0,
+    note: playInput.note.trim() || "Keine Notiz erfasst.",
+  };
+}
+
 export function AppDataProvider({ children }) {
   const [games, setGames] = useState(initialGames);
   const [plays, setPlays] = useState(initialPlays);
@@ -48,38 +92,18 @@ export function AppDataProvider({ children }) {
   }
 
   function addPlay(playInput) {
-    const selectedGame = games.find((game) => game.id === playInput.gameId);
     const play = {
       id: crypto.randomUUID(),
-      gameId: playInput.gameId,
-      game: selectedGame?.title ?? "Unbekanntes Spiel",
-      date: playInput.date,
-      players: Number(playInput.players) || 1,
-      winner: playInput.winner.trim() || "Nicht erfasst",
-      duration: Number(playInput.duration) || selectedGame?.duration || 0,
-      note: playInput.note.trim() || "Keine Notiz erfasst.",
+      ...buildPlay(playInput, games),
     };
 
     setPlays((currentPlays) => [play, ...currentPlays]);
   }
 
   function updatePlay(playId, playInput) {
-    const selectedGame = games.find((game) => game.id === playInput.gameId);
-
     setPlays((currentPlays) =>
       currentPlays.map((play) =>
-        play.id === playId
-          ? {
-              ...play,
-              gameId: playInput.gameId,
-              game: selectedGame?.title ?? play.game,
-              date: playInput.date,
-              players: Number(playInput.players) || 1,
-              winner: playInput.winner.trim() || "Nicht erfasst",
-              duration: Number(playInput.duration) || selectedGame?.duration || 0,
-              note: playInput.note.trim() || "Keine Notiz erfasst.",
-            }
-          : play,
+        play.id === playId ? buildPlay(playInput, games, play) : play,
       ),
     );
   }

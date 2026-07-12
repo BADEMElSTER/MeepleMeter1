@@ -2,28 +2,43 @@ import { useState } from "react";
 import Field from "../components/Field.jsx";
 import { useAppData } from "../data/AppDataContext.jsx";
 
+const defaultPlayerNames = ["Basti", "Nina", "Tom", "Lea"];
+
 function getToday() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function getScoringLabel(scoringMode) {
+  if (scoringMode === "low") {
+    return "Niedrigste Punktzahl gewinnt";
+  }
+
+  if (scoringMode === "none") {
+    return "Keine Punkte";
+  }
+
+  return "Höchste Punktzahl gewinnt";
+}
+
 export default function Plays() {
   const { games, plays, addPlay, updatePlay } = useAppData();
+  const knownPlayerNames = [
+    ...new Set([
+      ...defaultPlayerNames,
+      ...plays.flatMap((play) => play.participants?.map((participant) => participant.name) ?? []),
+    ]),
+  ];
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingPlayId, setEditingPlayId] = useState(null);
-  const [form, setForm] = useState({
-    gameId: games[0]?.id ?? "",
-    date: getToday(),
-    players: "",
-    winner: "",
-    duration: "",
-    note: "",
-  });
+  const [newPlayerName, setNewPlayerName] = useState("");
+  const [form, setForm] = useState(getInitialForm(knownPlayerNames, games));
 
-  function getInitialForm() {
+  function getInitialForm(playerNames = knownPlayerNames, availableGames = games) {
     return {
-      gameId: games[0]?.id ?? "",
+      gameId: availableGames[0]?.id ?? "",
       date: getToday(),
-      players: "",
+      scoringMode: "high",
+      participants: playerNames.slice(0, 2).map((name) => ({ name, score: "" })),
       winner: "",
       duration: "",
       note: "",
@@ -34,9 +49,45 @@ export default function Plays() {
     setForm((currentForm) => ({ ...currentForm, [field]: value }));
   }
 
+  function toggleParticipant(name) {
+    setForm((currentForm) => {
+      const isSelected = currentForm.participants.some((participant) => participant.name === name);
+
+      return {
+        ...currentForm,
+        participants: isSelected
+          ? currentForm.participants.filter((participant) => participant.name !== name)
+          : [...currentForm.participants, { name, score: "" }],
+      };
+    });
+  }
+
+  function updateParticipantScore(name, score) {
+    setForm((currentForm) => ({
+      ...currentForm,
+      participants: currentForm.participants.map((participant) =>
+        participant.name === name ? { ...participant, score } : participant,
+      ),
+    }));
+  }
+
+  function addPlayerName() {
+    const name = newPlayerName.trim();
+
+    if (!name || form.participants.some((participant) => participant.name === name)) {
+      return;
+    }
+
+    setForm((currentForm) => ({
+      ...currentForm,
+      participants: [...currentForm.participants, { name, score: "" }],
+    }));
+    setNewPlayerName("");
+  }
+
   function openCreateForm() {
     setEditingPlayId(null);
-    setForm(getInitialForm());
+    setForm(getInitialForm(knownPlayerNames, games));
     setIsFormOpen(true);
   }
 
@@ -46,7 +97,14 @@ export default function Plays() {
       gameId:
         play.gameId ?? games.find((game) => game.title === play.game)?.id ?? games[0]?.id ?? "",
       date: play.date,
-      players: String(play.players ?? ""),
+      scoringMode: play.scoringMode ?? "none",
+      participants:
+        play.participants?.length > 0
+          ? play.participants.map((participant) => ({
+              name: participant.name,
+              score: participant.score ?? "",
+            }))
+          : [{ name: play.winner ?? "Spieler 1", score: "" }],
       winner: play.winner ?? "",
       duration: String(play.duration ?? ""),
       note: play.note ?? "",
@@ -57,13 +115,14 @@ export default function Plays() {
   function closeForm() {
     setIsFormOpen(false);
     setEditingPlayId(null);
-    setForm(getInitialForm());
+    setNewPlayerName("");
+    setForm(getInitialForm(knownPlayerNames, games));
   }
 
   function handleSubmit(event) {
     event.preventDefault();
 
-    if (!form.gameId) {
+    if (!form.gameId || !form.participants.length) {
       return;
     }
 
@@ -95,7 +154,7 @@ export default function Plays() {
               <p className="eyebrow">{editingPlayId ? "Partie bearbeiten" : "Neue Partie"}</p>
               <h2>
                 {editingPlayId
-                  ? "Fehlende Angaben nachtragen."
+                  ? "Mitspieler und Punkte nachtragen."
                   : "Spieleabend dokumentieren."}
               </h2>
             </div>
@@ -103,6 +162,7 @@ export default function Plays() {
               Abbrechen
             </button>
           </div>
+
           <div className="form-grid">
             <Field label="Spiel">
               <select
@@ -124,22 +184,6 @@ export default function Plays() {
                 onChange={(event) => updateField("date", event.target.value)}
               />
             </Field>
-            <Field label="Spieleranzahl">
-              <input
-                min="1"
-                type="number"
-                value={form.players}
-                onChange={(event) => updateField("players", event.target.value)}
-                placeholder="4"
-              />
-            </Field>
-            <Field label="Gewinner">
-              <input
-                value={form.winner}
-                onChange={(event) => updateField("winner", event.target.value)}
-                placeholder="Name"
-              />
-            </Field>
             <Field label="Dauer in Minuten">
               <input
                 min="0"
@@ -149,6 +193,25 @@ export default function Plays() {
                 placeholder="75"
               />
             </Field>
+            <Field label="Wertung">
+              <select
+                value={form.scoringMode}
+                onChange={(event) => updateField("scoringMode", event.target.value)}
+              >
+                <option value="high">Höchste Punktzahl gewinnt</option>
+                <option value="low">Niedrigste Punktzahl gewinnt</option>
+                <option value="none">Keine Punkte</option>
+              </select>
+            </Field>
+            {form.scoringMode === "none" && (
+              <Field label="Gewinner">
+                <input
+                  value={form.winner}
+                  onChange={(event) => updateField("winner", event.target.value)}
+                  placeholder="Name oder offen lassen"
+                />
+              </Field>
+            )}
             <Field label="Notiz">
               <textarea
                 value={form.note}
@@ -157,6 +220,55 @@ export default function Plays() {
               />
             </Field>
           </div>
+
+          <section className="participant-section">
+            <div className="form-header">
+              <div>
+                <p className="eyebrow">Mitspieler</p>
+                <h3>Wer hat mitgespielt?</h3>
+              </div>
+              <span>{form.participants.length} ausgewählt</span>
+            </div>
+
+            <div className="participant-options">
+              {knownPlayerNames.map((name) => {
+                const participant = form.participants.find((entry) => entry.name === name);
+                const isSelected = Boolean(participant);
+
+                return (
+                  <label className="participant-row" key={name}>
+                    <input
+                      checked={isSelected}
+                      type="checkbox"
+                      onChange={() => toggleParticipant(name)}
+                    />
+                    <span>{name}</span>
+                    {form.scoringMode !== "none" && (
+                      <input
+                        disabled={!isSelected}
+                        type="number"
+                        value={participant?.score ?? ""}
+                        onChange={(event) => updateParticipantScore(name, event.target.value)}
+                        placeholder="Punkte"
+                      />
+                    )}
+                  </label>
+                );
+              })}
+            </div>
+
+            <div className="add-player-row">
+              <input
+                value={newPlayerName}
+                onChange={(event) => setNewPlayerName(event.target.value)}
+                placeholder="Neuer Mitspieler"
+              />
+              <button className="button button-secondary" type="button" onClick={addPlayerName}>
+                Hinzufügen
+              </button>
+            </div>
+          </section>
+
           <button className="button" type="submit">
             {editingPlayId ? "Änderungen speichern" : "Partie speichern"}
           </button>
@@ -170,14 +282,32 @@ export default function Plays() {
               <span>{new Date(play.date).toLocaleDateString("de-DE")}</span>
               <h2>{play.game}</h2>
               <p>{play.note}</p>
-              <button className="ghost-button inline-action" type="button" onClick={() => openEditForm(play)}>
+              <div className="participant-summary">
+                {(play.participants ?? []).map((participant) => (
+                  <span key={participant.name}>
+                    {participant.name}
+                    {play.scoringMode !== "none" && participant.score !== null
+                      ? ` · ${participant.score} P.`
+                      : ""}
+                  </span>
+                ))}
+              </div>
+              <button
+                className="ghost-button inline-action"
+                type="button"
+                onClick={() => openEditForm(play)}
+              >
                 Bearbeiten
               </button>
             </div>
             <dl>
               <div>
-                <dt>Spieler</dt>
+                <dt>Mitspieler</dt>
                 <dd>{play.players}</dd>
+              </div>
+              <div>
+                <dt>Wertung</dt>
+                <dd>{getScoringLabel(play.scoringMode)}</dd>
               </div>
               <div>
                 <dt>Gewinner</dt>
