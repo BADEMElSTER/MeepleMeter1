@@ -14,8 +14,8 @@ export default function Dashboard() {
       <div className="metric-grid">
         <Metric label="Spiele in Sammlung" value={stats.totalGames} />
         <Metric label="Erfasste Partien" value={stats.totalPlays} />
-        <Metric label="Ø Dauer" value={`${stats.averageDuration} Min.`} />
-        <Metric label="Top Spiel" value={stats.favoriteGame.title} />
+        <Metric label="Ø gespielte Dauer" value={`${stats.averageDuration} Min.`} />
+        <Metric label="Meistgespielt" value={stats.mostPlayedGame.title} />
       </div>
 
       <div className="panel-grid">

@@ -7,7 +7,6 @@ export const games = [
     maxPlayers: 4,
     duration: 120,
     plays: 7,
-    rating: 8.8,
   },
   {
     id: "cascadia",
@@ -17,7 +16,6 @@ export const games = [
     maxPlayers: 4,
     duration: 45,
     plays: 12,
-    rating: 8.1,
   },
   {
     id: "dune-imperium",
@@ -27,7 +25,6 @@ export const games = [
     maxPlayers: 4,
     duration: 90,
     plays: 9,
-    rating: 8.6,
   },
   {
     id: "quacks",
@@ -37,7 +34,6 @@ export const games = [
     maxPlayers: 4,
     duration: 45,
     plays: 15,
-    rating: 8.0,
   },
 ];
 

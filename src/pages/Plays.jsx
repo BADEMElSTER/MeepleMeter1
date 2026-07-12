@@ -198,7 +198,7 @@ export default function Plays() {
                 onChange={(event) => updateField("date", event.target.value)}
               />
             </Field>
-            <Field label="Dauer in Minuten">
+            <Field label="Tatsächliche Spielzeit in Minuten">
               <input
                 min="0"
                 type="number"

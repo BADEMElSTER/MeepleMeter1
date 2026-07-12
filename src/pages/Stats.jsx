@@ -35,9 +35,24 @@ export default function Stats() {
         <article className="panel highlight-panel">
           <p className="eyebrow">Kennzahlen</p>
           <h2>{stats.averageDuration} Minuten</h2>
-          <p>Durchschnittliche Dauer der zuletzt erfassten Partien.</p>
-          <h2>{stats.favoriteGame.rating.toFixed(1)} / 10</h2>
-          <p>Beste aktuelle Bewertung: {stats.favoriteGame.title}.</p>
+          <p>Durchschnittliche echte Dauer der erfassten Partien.</p>
+          <h2>{stats.mostPlayedGame.title}</h2>
+          <p>Aktuell meistgespieltes Spiel deiner Runde.</p>
+        </article>
+
+        <article className="panel">
+          <h2>Spielzeit nach Spieleranzahl</h2>
+          <div className="list">
+            {stats.durationByPlayerCount.map((group) => (
+              <div className="list-row" key={group.playerCount}>
+                <div>
+                  <strong>{group.playerCount} Spieler</strong>
+                  <span>{group.playCount} Partien</span>
+                </div>
+                <span>{group.averageDuration} Min.</span>
+              </div>
+            ))}
+          </div>
         </article>
       </div>
     </section>

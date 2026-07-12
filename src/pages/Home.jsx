@@ -53,8 +53,8 @@ export default function Home() {
                 <strong>Cascadia</strong>
               </div>
               <div>
-                <p className="label">Top Bewertung</p>
-                <strong>8,8 / 10</strong>
+                <p className="label">Ø Spielzeit</p>
+                <strong>65 Min.</strong>
               </div>
             </div>
             <div className="meter">
@@ -85,11 +85,11 @@ export default function Home() {
           <div className="feature-grid">
             <article className="feature-card">
               <h3>Sammlung verwalten</h3>
-              <p>Spiele mit Kategorie, Spielerzahl, Dauer und Bewertung erfassen.</p>
+              <p>Spiele mit Kategorie, Spielerzahl und vorgegebener Spielzeit erfassen.</p>
             </article>
             <article className="feature-card">
               <h3>Partien tracken</h3>
-              <p>Datum, Gewinner, Dauer, Spieleranzahl und Notizen dokumentieren.</p>
+              <p>Datum, Mitspieler, Punkte, echte Dauer und Notizen dokumentieren.</p>
             </article>
             <article className="feature-card">
               <h3>Statistiken sehen</h3>

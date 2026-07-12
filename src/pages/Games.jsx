@@ -8,7 +8,6 @@ const initialForm = {
   minPlayers: "1",
   maxPlayers: "4",
   duration: "",
-  rating: "",
 };
 
 function getGameForm(game) {
@@ -18,7 +17,6 @@ function getGameForm(game) {
     minPlayers: String(game.minPlayers),
     maxPlayers: String(game.maxPlayers),
     duration: String(game.duration),
-    rating: String(game.rating),
   };
 }
 
@@ -137,24 +135,13 @@ export default function Games() {
                 placeholder="4"
               />
             </Field>
-            <Field label="Dauer in Minuten">
+            <Field label="Vorgegebene Spielzeit in Minuten">
               <input
                 min="0"
                 type="number"
                 value={form.duration}
                 onChange={(event) => updateField("duration", event.target.value)}
                 placeholder="60"
-              />
-            </Field>
-            <Field label="Bewertung">
-              <input
-                max="10"
-                min="0"
-                step="0.1"
-                type="number"
-                value={form.rating}
-                onChange={(event) => updateField("rating", event.target.value)}
-                placeholder="8.0"
               />
             </Field>
           </div>
@@ -172,9 +159,8 @@ export default function Games() {
               <th>Kategorie</th>
               <th>Min.</th>
               <th>Max.</th>
-              <th>Dauer</th>
+              <th>Vorgegebene Spielzeit</th>
               <th>Partien</th>
-              <th>Rating</th>
               <th>Aktionen</th>
             </tr>
           </thead>
@@ -189,7 +175,6 @@ export default function Games() {
                 <td>{game.maxPlayers}</td>
                 <td>{game.duration} Min.</td>
                 <td>{game.plays}</td>
-                <td>{game.rating.toFixed(1)}</td>
                 <td>
                   <div className="table-actions">
                     <button className="ghost-button" type="button" onClick={() => openEditForm(game)}>

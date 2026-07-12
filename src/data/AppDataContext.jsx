@@ -48,7 +48,6 @@ function normalizeGame(game) {
     maxPlayers,
     players: minPlayers === maxPlayers ? `${minPlayers}` : `${minPlayers}–${maxPlayers}`,
     duration: Number(game.duration) || 0,
-    rating: Number(game.rating) || 0,
   };
 }
 
@@ -62,7 +61,6 @@ function buildGame(gameInput, existingGame = {}) {
     minPlayers,
     maxPlayers: Math.max(Number(gameInput.maxPlayers) || minPlayers, minPlayers),
     duration: Number(gameInput.duration) || 0,
-    rating: Number(gameInput.rating) || 0,
   });
 }
 
@@ -98,13 +96,36 @@ export function AppDataProvider({ children }) {
 
   const stats = useMemo(() => {
     const totalDuration = plays.reduce((sum, play) => sum + Number(play.duration), 0);
+    const durationByPlayerCount = plays
+      .reduce((groups, play) => {
+        const playerCount = Number(play.players) || 1;
+        const existingGroup = groups.find((group) => group.playerCount === playerCount);
+
+        if (existingGroup) {
+          existingGroup.totalDuration += Number(play.duration);
+          existingGroup.playCount += 1;
+        } else {
+          groups.push({
+            playerCount,
+            totalDuration: Number(play.duration),
+            playCount: 1,
+          });
+        }
+
+        return groups;
+      }, [])
+      .map((group) => ({
+        playerCount: group.playerCount,
+        playCount: group.playCount,
+        averageDuration: Math.round(group.totalDuration / group.playCount),
+      }))
+      .toSorted((a, b) => a.playerCount - b.playerCount);
     const gamesWithPlayCounts = games.map((game) => ({
       ...game,
       plays: plays.filter((play) => play.gameId === game.id || play.game === game.title).length,
     }));
     const fallbackGame = gamesWithPlayCounts[0] ?? {
       title: "Noch kein Spiel",
-      rating: 0,
       plays: 0,
     };
 
@@ -112,9 +133,7 @@ export function AppDataProvider({ children }) {
       totalGames: games.length,
       totalPlays: plays.length,
       averageDuration: plays.length ? Math.round(totalDuration / plays.length) : 0,
-      favoriteGame:
-        gamesWithPlayCounts.toSorted((a, b) => Number(b.rating) - Number(a.rating))[0] ??
-        fallbackGame,
+      durationByPlayerCount,
       mostPlayedGame:
         gamesWithPlayCounts.toSorted((a, b) => Number(b.plays) - Number(a.plays))[0] ??
         fallbackGame,
@@ -136,9 +155,7 @@ export function AppDataProvider({ children }) {
 
     setPlays((currentPlays) =>
       currentPlays.map((play) =>
-        play.gameId === gameId
-          ? { ...play, game: gameInput.title.trim() || play.game }
-          : play,
+        play.gameId === gameId ? { ...play, game: gameInput.title.trim() || play.game } : play,
       ),
     );
   }
