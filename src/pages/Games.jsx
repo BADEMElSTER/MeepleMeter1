@@ -21,7 +21,8 @@ function getGameForm(game) {
 }
 
 export default function Games() {
-  const { games, addGame, updateGame, deleteGame } = useAppData();
+  const { stats, addGame, updateGame, deleteGame } = useAppData();
+  const games = stats.gamesWithPlayCounts;
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingGameId, setEditingGameId] = useState(null);
   const [form, setForm] = useState(initialForm);
@@ -160,6 +161,7 @@ export default function Games() {
               <th>Min.</th>
               <th>Max.</th>
               <th>Vorgegebene Spielzeit</th>
+              <th>Ø tatsächliche Spielzeit</th>
               <th>Partien</th>
               <th>Aktionen</th>
             </tr>
@@ -174,6 +176,7 @@ export default function Games() {
                 <td>{game.minPlayers}</td>
                 <td>{game.maxPlayers}</td>
                 <td>{game.duration} Min.</td>
+                <td>{game.averagePlayedDuration ? `${game.averagePlayedDuration} Min.` : "–"}</td>
                 <td>{game.plays}</td>
                 <td>
                   <div className="table-actions">

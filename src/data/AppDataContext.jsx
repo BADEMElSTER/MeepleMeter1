@@ -120,10 +120,23 @@ export function AppDataProvider({ children }) {
         averageDuration: Math.round(group.totalDuration / group.playCount),
       }))
       .toSorted((a, b) => a.playerCount - b.playerCount);
-    const gamesWithPlayCounts = games.map((game) => ({
-      ...game,
-      plays: plays.filter((play) => play.gameId === game.id || play.game === game.title).length,
-    }));
+    const gamesWithPlayCounts = games.map((game) => {
+      const matchingPlays = plays.filter(
+        (play) => play.gameId === game.id || play.game === game.title,
+      );
+      const totalGameDuration = matchingPlays.reduce(
+        (sum, play) => sum + Number(play.duration),
+        0,
+      );
+
+      return {
+        ...game,
+        plays: matchingPlays.length,
+        averagePlayedDuration: matchingPlays.length
+          ? Math.round(totalGameDuration / matchingPlays.length)
+          : null,
+      };
+    });
     const fallbackGame = gamesWithPlayCounts[0] ?? {
       title: "Noch kein Spiel",
       plays: 0,
