@@ -595,6 +595,60 @@ th {
   padding: 1.5rem;
 }
 
+.catalog-search {
+  display: grid;
+  gap: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 1.25rem;
+  background: rgba(255, 241, 219, 0.45);
+}
+
+.catalog-search p {
+  color: var(--muted);
+  line-height: 1.6;
+  margin-bottom: 0;
+}
+
+.catalog-results {
+  display: grid;
+  gap: 0.75rem;
+  max-height: 24rem;
+  overflow-y: auto;
+}
+
+.catalog-result {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1rem;
+  align-items: center;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  background: var(--surface);
+}
+
+.catalog-result strong,
+.catalog-result span {
+  display: block;
+}
+
+.catalog-result span,
+.form-message {
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.catalog-result button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.form-message {
+  margin: 0;
+}
+
 .participant-section {
   display: grid;
   gap: 1rem;
@@ -882,6 +936,7 @@ dd {
   .row-heading,
   .form-header,
   .form-grid,
+  .catalog-result,
   .participant-options,
   .dropdown-player-list,
   .participant-row,

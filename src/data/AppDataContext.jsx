@@ -48,6 +48,13 @@ function normalizeGame(game) {
     maxPlayers,
     players: minPlayers === maxPlayers ? `${minPlayers}` : `${minPlayers}–${maxPlayers}`,
     duration: Number(game.duration) || 0,
+    bggId: game.bggId ?? null,
+    catalogId: game.catalogId ?? null,
+    catalogYear: game.catalogYear ?? null,
+    catalogRank: game.catalogRank ?? null,
+    catalogRating: game.catalogRating ?? null,
+    catalogImage: game.catalogImage ?? null,
+    catalogExpansions: game.catalogExpansions ?? [],
   };
 }
 
@@ -61,7 +68,18 @@ function buildGame(gameInput, existingGame = {}) {
     minPlayers,
     maxPlayers: Math.max(Number(gameInput.maxPlayers) || minPlayers, minPlayers),
     duration: Number(gameInput.duration) || 0,
+    bggId: gameInput.bggId ?? existingGame.bggId ?? null,
+    catalogId: gameInput.catalogId ?? existingGame.catalogId ?? null,
+    catalogYear: gameInput.catalogYear ?? existingGame.catalogYear ?? null,
+    catalogRank: gameInput.catalogRank ?? existingGame.catalogRank ?? null,
+    catalogRating: gameInput.catalogRating ?? existingGame.catalogRating ?? null,
+    catalogImage: gameInput.catalogImage ?? existingGame.catalogImage ?? null,
+    catalogExpansions: gameInput.catalogExpansions ?? existingGame.catalogExpansions ?? [],
   });
+}
+
+function normalizeTitle(title) {
+  return title.trim().toLowerCase();
 }
 
 function buildPlay(playInput, games, existingPlay = {}) {
@@ -155,10 +173,24 @@ export function AppDataProvider({ children }) {
   }, [games, plays]);
 
   function addGame(gameInput) {
-    setGames((currentGames) => [
-      { id: crypto.randomUUID(), ...buildGame(gameInput) },
-      ...currentGames,
-    ]);
+    let wasAdded = false;
+
+    setGames((currentGames) => {
+      const alreadyExists = currentGames.some(
+        (game) =>
+          (gameInput.bggId && game.bggId === gameInput.bggId) ||
+          normalizeTitle(game.title) === normalizeTitle(gameInput.title),
+      );
+
+      if (alreadyExists) {
+        return currentGames;
+      }
+
+      wasAdded = true;
+      return [{ id: crypto.randomUUID(), ...buildGame(gameInput) }, ...currentGames];
+    });
+
+    return wasAdded;
   }
 
   function updateGame(gameId, gameInput) {

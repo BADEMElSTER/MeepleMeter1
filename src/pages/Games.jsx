@@ -1,6 +1,7 @@
 import { useState } from "react";
 import Field from "../components/Field.jsx";
 import { useAppData } from "../data/AppDataContext.jsx";
+import { gameCatalog } from "../data/gameCatalog.js";
 
 const initialForm = {
   title: "",
@@ -8,11 +9,19 @@ const initialForm = {
   minPlayers: "1",
   maxPlayers: "4",
   duration: "",
+  bggId: null,
+  catalogId: null,
+  catalogYear: null,
+  catalogRank: null,
+  catalogRating: null,
+  catalogImage: null,
+  catalogExpansions: [],
 };
 
 const sortableColumns = [
   { key: "title", label: "Spiel", type: "text" },
   { key: "category", label: "Kategorie", type: "text" },
+  { key: "catalogYear", label: "Jahr", type: "number" },
   { key: "minPlayers", label: "Min.", type: "number" },
   { key: "maxPlayers", label: "Max.", type: "number" },
   { key: "duration", label: "Vorgegebene Spielzeit", type: "number" },
@@ -27,6 +36,13 @@ function getGameForm(game) {
     minPlayers: String(game.minPlayers),
     maxPlayers: String(game.maxPlayers),
     duration: String(game.duration),
+    bggId: game.bggId ?? null,
+    catalogId: game.catalogId ?? null,
+    catalogYear: game.catalogYear ?? null,
+    catalogRank: game.catalogRank ?? null,
+    catalogRating: game.catalogRating ?? null,
+    catalogImage: game.catalogImage ?? null,
+    catalogExpansions: game.catalogExpansions ?? [],
   };
 }
 
@@ -37,6 +53,9 @@ export default function Games() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingGameId, setEditingGameId] = useState(null);
   const [form, setForm] = useState(initialForm);
+  const [catalogQuery, setCatalogQuery] = useState("");
+  const [formMessage, setFormMessage] = useState("");
+  const catalogResults = getCatalogResults(catalogQuery, stats.gamesWithPlayCounts);
 
   function updateField(field, value) {
     setForm((currentForm) => ({ ...currentForm, [field]: value }));
@@ -53,19 +72,44 @@ export default function Games() {
   function openCreateForm() {
     setEditingGameId(null);
     setForm(initialForm);
+    setCatalogQuery("");
+    setFormMessage("");
     setIsFormOpen(true);
   }
 
   function openEditForm(game) {
     setEditingGameId(game.id);
     setForm(getGameForm(game));
+    setCatalogQuery("");
+    setFormMessage("");
     setIsFormOpen(true);
   }
 
   function closeForm() {
     setEditingGameId(null);
     setForm(initialForm);
+    setCatalogQuery("");
+    setFormMessage("");
     setIsFormOpen(false);
+  }
+
+  function applyCatalogEntry(entry) {
+    setForm({
+      ...initialForm,
+      title: entry.name,
+      category: "Katalogspiel",
+      minPlayers: String(entry.minPlayers ?? 1),
+      maxPlayers: String(entry.maxPlayers ?? entry.minPlayers ?? 1),
+      duration: String(entry.maxPlayTime ?? entry.minPlayTime ?? 0),
+      bggId: entry.bggId,
+      catalogId: entry.id,
+      catalogYear: entry.year,
+      catalogRank: entry.rank,
+      catalogRating: entry.rating,
+      catalogImage: entry.image,
+      catalogExpansions: entry.expansions ?? [],
+    });
+    setFormMessage(`Katalogdaten für "${entry.name}" übernommen. Bitte prüfen und speichern.`);
   }
 
   function handleSubmit(event) {
@@ -78,7 +122,12 @@ export default function Games() {
     if (editingGameId) {
       updateGame(editingGameId, form);
     } else {
-      addGame(form);
+      const wasAdded = addGame(form);
+
+      if (!wasAdded) {
+        setFormMessage("Dieses Spiel existiert bereits in deiner Sammlung.");
+        return;
+      }
     }
 
     closeForm();
@@ -121,6 +170,53 @@ export default function Games() {
               Abbrechen
             </button>
           </div>
+          {!editingGameId && (
+            <section className="catalog-search">
+              <div>
+                <p className="eyebrow">Spielekatalog</p>
+                <h3>Erst im Katalog suchen.</h3>
+                <p>
+                  Der Katalog ist getrennt von deiner Sammlung. Beim Übernehmen wird daraus
+                  ein persönliches Spiel angelegt.
+                </p>
+              </div>
+              <Field label="Katalog durchsuchen">
+                <input
+                  value={catalogQuery}
+                  onChange={(event) => setCatalogQuery(event.target.value)}
+                  placeholder="z. B. Ark Nova, Brass, Dune"
+                />
+              </Field>
+              {catalogQuery.trim() && (
+                <div className="catalog-results">
+                  {catalogResults.map((entry) => (
+                    <article className="catalog-result" key={entry.id}>
+                      <div>
+                        <strong>{entry.name}</strong>
+                        <span>
+                          {entry.year ?? "o. J."} · {entry.minPlayers}–{entry.maxPlayers} Spieler ·{" "}
+                          {entry.playingTime}
+                          {entry.isOwned ? " · bereits in Sammlung" : ""}
+                        </span>
+                      </div>
+                      <button
+                        className="button button-secondary"
+                        type="button"
+                        disabled={entry.isOwned}
+                        onClick={() => applyCatalogEntry(entry)}
+                      >
+                        Übernehmen
+                      </button>
+                    </article>
+                  ))}
+                  {catalogResults.length === 0 && (
+                    <p className="empty-hint">Kein Katalogtreffer. Du kannst manuell anlegen.</p>
+                  )}
+                </div>
+              )}
+            </section>
+          )}
+          {formMessage && <p className="form-message">{formMessage}</p>}
           <div className="form-grid">
             <Field label="Titel">
               <input
@@ -210,6 +306,7 @@ export default function Games() {
                   <strong>{game.title}</strong>
                 </td>
                 <td>{game.category}</td>
+                <td>{game.catalogYear ?? "–"}</td>
                 <td>{game.minPlayers}</td>
                 <td>{game.maxPlayers}</td>
                 <td>{game.duration} Min.</td>
@@ -252,4 +349,36 @@ function sortGames(games, sortConfig) {
 
     return String(firstValue).localeCompare(String(secondValue), "de") * directionFactor;
   });
+}
+
+function getCatalogResults(query, existingGames) {
+  const normalizedQuery = query.trim().toLowerCase();
+
+  if (!normalizedQuery) {
+    return [];
+  }
+
+  return gameCatalog
+    .filter((entry) => {
+      const searchableText = [
+        entry.name,
+        entry.year,
+        entry.bggId,
+        entry.expansions?.map((expansion) => expansion.name).join(" "),
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return searchableText.includes(normalizedQuery);
+    })
+    .slice(0, 12)
+    .map((entry) => ({
+      ...entry,
+      isOwned: existingGames.some(
+        (game) =>
+          (entry.bggId && game.bggId === entry.bggId) ||
+          game.title.trim().toLowerCase() === entry.name.trim().toLowerCase(),
+      ),
+    }));
 }
