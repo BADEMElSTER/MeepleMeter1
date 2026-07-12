@@ -1,7 +1,9 @@
-import { games, stats } from "../data/mockData.js";
+import { useAppData } from "../data/AppDataContext.jsx";
 
 export default function Stats() {
-  const maxPlays = Math.max(...games.map((game) => game.plays));
+  const { stats } = useAppData();
+  const games = stats.gamesWithPlayCounts;
+  const maxPlays = Math.max(...games.map((game) => game.plays), 1);
 
   return (
     <section className="page">

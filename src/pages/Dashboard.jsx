@@ -1,7 +1,9 @@
 import { Link } from "react-router-dom";
-import { plays, stats } from "../data/mockData.js";
+import { useAppData } from "../data/AppDataContext.jsx";
 
 export default function Dashboard() {
+  const { plays, stats } = useAppData();
+
   return (
     <section className="page">
       <div className="page-heading">

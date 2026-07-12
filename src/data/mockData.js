@@ -66,13 +66,3 @@ export const plays = [
     note: "Viele Explosionen, trotzdem hoher Spaßfaktor.",
   },
 ];
-
-export const stats = {
-  totalGames: games.length,
-  totalPlays: plays.length,
-  averageDuration: Math.round(
-    plays.reduce((sum, play) => sum + play.duration, 0) / plays.length,
-  ),
-  favoriteGame: games.toSorted((a, b) => b.rating - a.rating)[0],
-  mostPlayedGame: games.toSorted((a, b) => b.plays - a.plays)[0],
-};

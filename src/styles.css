@@ -34,7 +34,9 @@ a {
 }
 
 button,
-input {
+input,
+select,
+textarea {
   font: inherit;
 }
 
@@ -196,7 +198,8 @@ h3 {
 .feature-card,
 .table-card,
 .play-card,
-.auth-card {
+.auth-card,
+.entry-form {
   border: 1px solid var(--border);
   background: rgba(255, 255, 255, 0.82);
   box-shadow: var(--shadow);
@@ -281,7 +284,8 @@ h3 {
 .stats-list li,
 .list-row,
 .panel-header,
-.row-heading {
+.row-heading,
+.form-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -457,7 +461,8 @@ h3 {
 .panel,
 .table-card,
 .play-card,
-.auth-card {
+.auth-card,
+.entry-form {
   border-radius: 1.5rem;
 }
 
@@ -556,6 +561,54 @@ th {
 .chart-list {
   display: grid;
   gap: 1rem;
+}
+
+.entry-form {
+  display: grid;
+  gap: 1.25rem;
+  margin-bottom: 1.25rem;
+  padding: 1.5rem;
+}
+
+.form-header h2 {
+  margin-bottom: 0;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.field {
+  display: grid;
+  gap: 0.45rem;
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.field input,
+.field select,
+.field textarea {
+  width: 100%;
+  padding: 0.95rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.field textarea {
+  min-height: 7rem;
+  resize: vertical;
+}
+
+.ghost-button {
+  border: 0;
+  background: transparent;
+  color: var(--primary-dark);
+  cursor: pointer;
+  font-weight: 900;
 }
 
 .play-card {
@@ -691,6 +744,8 @@ dd {
   .metric-grid,
   .side-nav,
   .row-heading,
+  .form-header,
+  .form-grid,
   dl,
   .chart-row {
     display: grid;
