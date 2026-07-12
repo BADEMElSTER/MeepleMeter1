@@ -63,8 +63,29 @@ export function AppDataProvider({ children }) {
     setPlays((currentPlays) => [play, ...currentPlays]);
   }
 
+  function updatePlay(playId, playInput) {
+    const selectedGame = games.find((game) => game.id === playInput.gameId);
+
+    setPlays((currentPlays) =>
+      currentPlays.map((play) =>
+        play.id === playId
+          ? {
+              ...play,
+              gameId: playInput.gameId,
+              game: selectedGame?.title ?? play.game,
+              date: playInput.date,
+              players: Number(playInput.players) || 1,
+              winner: playInput.winner.trim() || "Nicht erfasst",
+              duration: Number(playInput.duration) || selectedGame?.duration || 0,
+              note: playInput.note.trim() || "Keine Notiz erfasst.",
+            }
+          : play,
+      ),
+    );
+  }
+
   const value = useMemo(
-    () => ({ games, plays, stats, addGame, addPlay }),
+    () => ({ games, plays, stats, addGame, addPlay, updatePlay }),
     [games, plays, stats],
   );
 

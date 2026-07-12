@@ -611,6 +611,11 @@ th {
   font-weight: 900;
 }
 
+.inline-action {
+  margin-top: 0.75rem;
+  padding: 0;
+}
+
 .play-card {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

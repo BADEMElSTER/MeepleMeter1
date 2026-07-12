@@ -7,8 +7,9 @@ function getToday() {
 }
 
 export default function Plays() {
-  const { games, plays, addPlay } = useAppData();
+  const { games, plays, addPlay, updatePlay } = useAppData();
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingPlayId, setEditingPlayId] = useState(null);
   const [form, setForm] = useState({
     gameId: games[0]?.id ?? "",
     date: getToday(),
@@ -18,8 +19,45 @@ export default function Plays() {
     note: "",
   });
 
+  function getInitialForm() {
+    return {
+      gameId: games[0]?.id ?? "",
+      date: getToday(),
+      players: "",
+      winner: "",
+      duration: "",
+      note: "",
+    };
+  }
+
   function updateField(field, value) {
     setForm((currentForm) => ({ ...currentForm, [field]: value }));
+  }
+
+  function openCreateForm() {
+    setEditingPlayId(null);
+    setForm(getInitialForm());
+    setIsFormOpen(true);
+  }
+
+  function openEditForm(play) {
+    setEditingPlayId(play.id);
+    setForm({
+      gameId:
+        play.gameId ?? games.find((game) => game.title === play.game)?.id ?? games[0]?.id ?? "",
+      date: play.date,
+      players: String(play.players ?? ""),
+      winner: play.winner ?? "",
+      duration: String(play.duration ?? ""),
+      note: play.note ?? "",
+    });
+    setIsFormOpen(true);
+  }
+
+  function closeForm() {
+    setIsFormOpen(false);
+    setEditingPlayId(null);
+    setForm(getInitialForm());
   }
 
   function handleSubmit(event) {
@@ -29,16 +67,13 @@ export default function Plays() {
       return;
     }
 
-    addPlay(form);
-    setForm({
-      gameId: games[0]?.id ?? "",
-      date: getToday(),
-      players: "",
-      winner: "",
-      duration: "",
-      note: "",
-    });
-    setIsFormOpen(false);
+    if (editingPlayId) {
+      updatePlay(editingPlayId, form);
+    } else {
+      addPlay(form);
+    }
+
+    closeForm();
   }
 
   return (
@@ -48,7 +83,7 @@ export default function Plays() {
           <p className="eyebrow">Partien</p>
           <h1>Was wurde gespielt?</h1>
         </div>
-        <button className="button" type="button" onClick={() => setIsFormOpen(true)}>
+        <button className="button" type="button" onClick={openCreateForm}>
           Partie erfassen
         </button>
       </div>
@@ -57,11 +92,15 @@ export default function Plays() {
         <form className="entry-form" onSubmit={handleSubmit}>
           <div className="form-header">
             <div>
-              <p className="eyebrow">Neue Partie</p>
-              <h2>Spieleabend dokumentieren.</h2>
+              <p className="eyebrow">{editingPlayId ? "Partie bearbeiten" : "Neue Partie"}</p>
+              <h2>
+                {editingPlayId
+                  ? "Fehlende Angaben nachtragen."
+                  : "Spieleabend dokumentieren."}
+              </h2>
             </div>
-            <button className="ghost-button" type="button" onClick={() => setIsFormOpen(false)}>
-              Schließen
+            <button className="ghost-button" type="button" onClick={closeForm}>
+              Abbrechen
             </button>
           </div>
           <div className="form-grid">
@@ -119,7 +158,7 @@ export default function Plays() {
             </Field>
           </div>
           <button className="button" type="submit">
-            Partie speichern
+            {editingPlayId ? "Änderungen speichern" : "Partie speichern"}
           </button>
         </form>
       )}
@@ -131,6 +170,9 @@ export default function Plays() {
               <span>{new Date(play.date).toLocaleDateString("de-DE")}</span>
               <h2>{play.game}</h2>
               <p>{play.note}</p>
+              <button className="ghost-button inline-action" type="button" onClick={() => openEditForm(play)}>
+                Bearbeiten
+              </button>
             </div>
             <dl>
               <div>
