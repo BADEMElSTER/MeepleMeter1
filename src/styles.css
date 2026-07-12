@@ -557,6 +557,31 @@ th {
   text-transform: uppercase;
 }
 
+.sort-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 900;
+  letter-spacing: inherit;
+  padding: 0;
+  text-align: left;
+  text-transform: inherit;
+}
+
+.sort-button:hover {
+  color: var(--primary-dark);
+}
+
+.sort-button span {
+  font-size: 0.9rem;
+  line-height: 1;
+}
+
 .play-list,
 .chart-list {
   display: grid;

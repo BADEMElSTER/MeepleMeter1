@@ -10,6 +10,16 @@ const initialForm = {
   duration: "",
 };
 
+const sortableColumns = [
+  { key: "title", label: "Spiel", type: "text" },
+  { key: "category", label: "Kategorie", type: "text" },
+  { key: "minPlayers", label: "Min.", type: "number" },
+  { key: "maxPlayers", label: "Max.", type: "number" },
+  { key: "duration", label: "Vorgegebene Spielzeit", type: "number" },
+  { key: "averagePlayedDuration", label: "Ø tatsächliche Spielzeit", type: "number" },
+  { key: "plays", label: "Partien", type: "number" },
+];
+
 function getGameForm(game) {
   return {
     title: game.title,
@@ -22,13 +32,22 @@ function getGameForm(game) {
 
 export default function Games() {
   const { stats, addGame, updateGame, deleteGame } = useAppData();
-  const games = stats.gamesWithPlayCounts;
+  const [sortConfig, setSortConfig] = useState({ key: "title", direction: "asc" });
+  const games = sortGames(stats.gamesWithPlayCounts, sortConfig);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingGameId, setEditingGameId] = useState(null);
   const [form, setForm] = useState(initialForm);
 
   function updateField(field, value) {
     setForm((currentForm) => ({ ...currentForm, [field]: value }));
+  }
+
+  function updateSort(key) {
+    setSortConfig((currentSort) => ({
+      key,
+      direction:
+        currentSort.key === key && currentSort.direction === "asc" ? "desc" : "asc",
+    }));
   }
 
   function openCreateForm() {
@@ -156,13 +175,31 @@ export default function Games() {
         <table>
           <thead>
             <tr>
-              <th>Spiel</th>
-              <th>Kategorie</th>
-              <th>Min.</th>
-              <th>Max.</th>
-              <th>Vorgegebene Spielzeit</th>
-              <th>Ø tatsächliche Spielzeit</th>
-              <th>Partien</th>
+              {sortableColumns.map((column) => (
+                <th key={column.key}>
+                  <button
+                    className="sort-button"
+                    type="button"
+                    onClick={() => updateSort(column.key)}
+                    aria-sort={
+                      sortConfig.key === column.key
+                        ? sortConfig.direction === "asc"
+                          ? "ascending"
+                          : "descending"
+                        : "none"
+                    }
+                  >
+                    {column.label}
+                    <span>
+                      {sortConfig.key === column.key
+                        ? sortConfig.direction === "asc"
+                          ? "↑"
+                          : "↓"
+                        : "↕"}
+                    </span>
+                  </button>
+                </th>
+              ))}
               <th>Aktionen</th>
             </tr>
           </thead>
@@ -199,4 +236,20 @@ export default function Games() {
       </div>
     </section>
   );
+}
+
+function sortGames(games, sortConfig) {
+  const column = sortableColumns.find((entry) => entry.key === sortConfig.key);
+  const directionFactor = sortConfig.direction === "asc" ? 1 : -1;
+
+  return [...games].toSorted((firstGame, secondGame) => {
+    const firstValue = firstGame[sortConfig.key] ?? "";
+    const secondValue = secondGame[sortConfig.key] ?? "";
+
+    if (column?.type === "number") {
+      return (Number(firstValue) - Number(secondValue)) * directionFactor;
+    }
+
+    return String(firstValue).localeCompare(String(secondValue), "de") * directionFactor;
+  });
 }
