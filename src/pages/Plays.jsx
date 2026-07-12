@@ -22,19 +22,20 @@ function getScoringLabel(scoringMode) {
 
 export default function Plays() {
   const { games, plays, addPlay, updatePlay, deletePlay } = useAppData();
-  const knownPlayerNames = [
-    ...new Set([
-      ...defaultPlayerNames,
-      ...plays.flatMap((play) => play.participants?.map((participant) => participant.name) ?? []),
-    ]),
-  ];
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingPlayId, setEditingPlayId] = useState(null);
   const [newPlayerName, setNewPlayerName] = useState("");
+  const [playerSearch, setPlayerSearch] = useState("");
+  const knownPlayerNames = getKnownPlayerNames(plays, []);
   const [form, setForm] = useState(getInitialForm(knownPlayerNames, games));
+  const sortedPlayerNames = getKnownPlayerNames(plays, form.participants);
   const selectablePlayerNames = [
-    ...new Set([...knownPlayerNames, ...form.participants.map((participant) => participant.name)]),
+    ...new Set([...sortedPlayerNames, ...form.participants.map((participant) => participant.name)]),
   ];
+  const detailedPlayerNames = selectablePlayerNames.slice(0, 4);
+  const dropdownPlayerNames = selectablePlayerNames
+    .filter((name) => !detailedPlayerNames.includes(name))
+    .filter((name) => name.toLowerCase().includes(playerSearch.toLowerCase()));
 
   function getInitialForm(playerNames = knownPlayerNames, availableGames = games) {
     return {
@@ -86,11 +87,12 @@ export default function Plays() {
       participants: [...currentForm.participants, { name, score: "" }],
     }));
     setNewPlayerName("");
+    setPlayerSearch("");
   }
 
   function openCreateForm() {
     setEditingPlayId(null);
-    setForm(getInitialForm(knownPlayerNames, games));
+    setForm(getInitialForm(sortedPlayerNames, games));
     setIsFormOpen(true);
   }
 
@@ -119,7 +121,8 @@ export default function Plays() {
     setIsFormOpen(false);
     setEditingPlayId(null);
     setNewPlayerName("");
-    setForm(getInitialForm(knownPlayerNames, games));
+    setPlayerSearch("");
+    setForm(getInitialForm(sortedPlayerNames, games));
   }
 
   function handleSubmit(event) {
@@ -242,7 +245,7 @@ export default function Plays() {
             </div>
 
             <div className="participant-options">
-              {selectablePlayerNames.map((name) => {
+              {detailedPlayerNames.map((name) => {
                 const participant = form.participants.find((entry) => entry.name === name);
                 const isSelected = Boolean(participant);
 
@@ -267,6 +270,47 @@ export default function Plays() {
                 );
               })}
             </div>
+
+            {selectablePlayerNames.length > 4 && (
+              <div className="participant-dropdown">
+                <Field label="Weitere Mitspieler suchen">
+                  <input
+                    value={playerSearch}
+                    onChange={(event) => setPlayerSearch(event.target.value)}
+                    placeholder="Name suchen"
+                  />
+                </Field>
+                <div className="dropdown-player-list">
+                  {dropdownPlayerNames.map((name) => {
+                    const participant = form.participants.find((entry) => entry.name === name);
+                    const isSelected = Boolean(participant);
+
+                    return (
+                      <label className="participant-row" key={name}>
+                        <input
+                          checked={isSelected}
+                          type="checkbox"
+                          onChange={() => toggleParticipant(name)}
+                        />
+                        <span>{name}</span>
+                        {form.scoringMode !== "none" && (
+                          <input
+                            disabled={!isSelected}
+                            type="number"
+                            value={participant?.score ?? ""}
+                            onChange={(event) => updateParticipantScore(name, event.target.value)}
+                            placeholder="Punkte"
+                          />
+                        )}
+                      </label>
+                    );
+                  })}
+                  {dropdownPlayerNames.length === 0 && (
+                    <p className="empty-hint">Kein weiterer Mitspieler gefunden.</p>
+                  )}
+                </div>
+              </div>
+            )}
 
             <div className="add-player-row">
               <input
@@ -347,4 +391,28 @@ export default function Plays() {
       </div>
     </section>
   );
+}
+
+function getKnownPlayerNames(plays, currentParticipants) {
+  const frequencies = new Map();
+
+  for (const name of defaultPlayerNames) {
+    frequencies.set(name, 0);
+  }
+
+  for (const play of plays) {
+    for (const participant of play.participants ?? []) {
+      frequencies.set(participant.name, (frequencies.get(participant.name) ?? 0) + 1);
+    }
+  }
+
+  for (const participant of currentParticipants) {
+    if (!frequencies.has(participant.name)) {
+      frequencies.set(participant.name, 0);
+    }
+  }
+
+  return [...frequencies.entries()]
+    .toSorted((first, second) => second[1] - first[1] || first[0].localeCompare(second[0]))
+    .map(([name]) => name);
 }
