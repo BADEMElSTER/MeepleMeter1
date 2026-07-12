@@ -11,13 +11,43 @@ const initialForm = {
   rating: "",
 };
 
+function getGameForm(game) {
+  return {
+    title: game.title,
+    category: game.category,
+    minPlayers: String(game.minPlayers),
+    maxPlayers: String(game.maxPlayers),
+    duration: String(game.duration),
+    rating: String(game.rating),
+  };
+}
+
 export default function Games() {
-  const { games, addGame } = useAppData();
+  const { games, addGame, updateGame, deleteGame } = useAppData();
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingGameId, setEditingGameId] = useState(null);
   const [form, setForm] = useState(initialForm);
 
   function updateField(field, value) {
     setForm((currentForm) => ({ ...currentForm, [field]: value }));
+  }
+
+  function openCreateForm() {
+    setEditingGameId(null);
+    setForm(initialForm);
+    setIsFormOpen(true);
+  }
+
+  function openEditForm(game) {
+    setEditingGameId(game.id);
+    setForm(getGameForm(game));
+    setIsFormOpen(true);
+  }
+
+  function closeForm() {
+    setEditingGameId(null);
+    setForm(initialForm);
+    setIsFormOpen(false);
   }
 
   function handleSubmit(event) {
@@ -27,9 +57,23 @@ export default function Games() {
       return;
     }
 
-    addGame(form);
-    setForm(initialForm);
-    setIsFormOpen(false);
+    if (editingGameId) {
+      updateGame(editingGameId, form);
+    } else {
+      addGame(form);
+    }
+
+    closeForm();
+  }
+
+  function handleDelete(game) {
+    const confirmed = window.confirm(
+      `Spiel "${game.title}" löschen? Zugehörige Partien werden ebenfalls gelöscht.`,
+    );
+
+    if (confirmed) {
+      deleteGame(game.id);
+    }
   }
 
   return (
@@ -39,7 +83,7 @@ export default function Games() {
           <p className="eyebrow">Sammlung</p>
           <h1>Deine Spiele.</h1>
         </div>
-        <button className="button" type="button" onClick={() => setIsFormOpen(true)}>
+        <button className="button" type="button" onClick={openCreateForm}>
           Spiel hinzufügen
         </button>
       </div>
@@ -48,11 +92,15 @@ export default function Games() {
         <form className="entry-form" onSubmit={handleSubmit}>
           <div className="form-header">
             <div>
-              <p className="eyebrow">Neues Spiel</p>
-              <h2>Spiel zur Sammlung hinzufügen.</h2>
+              <p className="eyebrow">{editingGameId ? "Spiel bearbeiten" : "Neues Spiel"}</p>
+              <h2>
+                {editingGameId
+                  ? "Spielinformationen aktualisieren."
+                  : "Spiel zur Sammlung hinzufügen."}
+              </h2>
             </div>
-            <button className="ghost-button" type="button" onClick={() => setIsFormOpen(false)}>
-              Schließen
+            <button className="ghost-button" type="button" onClick={closeForm}>
+              Abbrechen
             </button>
           </div>
           <div className="form-grid">
@@ -111,7 +159,7 @@ export default function Games() {
             </Field>
           </div>
           <button className="button" type="submit">
-            Spiel speichern
+            {editingGameId ? "Änderungen speichern" : "Spiel speichern"}
           </button>
         </form>
       )}
@@ -127,6 +175,7 @@ export default function Games() {
               <th>Dauer</th>
               <th>Partien</th>
               <th>Rating</th>
+              <th>Aktionen</th>
             </tr>
           </thead>
           <tbody>
@@ -141,6 +190,20 @@ export default function Games() {
                 <td>{game.duration} Min.</td>
                 <td>{game.plays}</td>
                 <td>{game.rating.toFixed(1)}</td>
+                <td>
+                  <div className="table-actions">
+                    <button className="ghost-button" type="button" onClick={() => openEditForm(game)}>
+                      Bearbeiten
+                    </button>
+                    <button
+                      className="ghost-button danger-action"
+                      type="button"
+                      onClick={() => handleDelete(game)}
+                    >
+                      Löschen
+                    </button>
+                  </div>
+                </td>
               </tr>
             ))}
           </tbody>

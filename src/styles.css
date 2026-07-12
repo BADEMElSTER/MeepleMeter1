@@ -670,8 +670,20 @@ th {
 }
 
 .inline-action {
+  display: inline-flex;
   margin-top: 0.75rem;
+  margin-right: 1rem;
   padding: 0;
+}
+
+.danger-action {
+  color: #b42318;
+}
+
+.table-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
 }
 
 .play-card {

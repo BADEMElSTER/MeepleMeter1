@@ -21,7 +21,7 @@ function getScoringLabel(scoringMode) {
 }
 
 export default function Plays() {
-  const { games, plays, addPlay, updatePlay } = useAppData();
+  const { games, plays, addPlay, updatePlay, deletePlay } = useAppData();
   const knownPlayerNames = [
     ...new Set([
       ...defaultPlayerNames,
@@ -133,6 +133,14 @@ export default function Plays() {
     }
 
     closeForm();
+  }
+
+  function handleDelete(play) {
+    const confirmed = window.confirm(`Partie "${play.game}" vom ${new Date(play.date).toLocaleDateString("de-DE")} löschen?`);
+
+    if (confirmed) {
+      deletePlay(play.id);
+    }
   }
 
   return (
@@ -298,6 +306,13 @@ export default function Plays() {
                 onClick={() => openEditForm(play)}
               >
                 Bearbeiten
+              </button>
+              <button
+                className="ghost-button danger-action inline-action"
+                type="button"
+                onClick={() => handleDelete(play)}
+              >
+                Löschen
               </button>
             </div>
             <dl>
