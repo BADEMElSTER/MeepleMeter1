@@ -1,0 +1,78 @@
+export const games = [
+  {
+    id: "ark-nova",
+    title: "Arche Nova",
+    category: "Expertenspiel",
+    players: "1–4",
+    duration: 120,
+    plays: 7,
+    rating: 8.8,
+  },
+  {
+    id: "cascadia",
+    title: "Cascadia",
+    category: "Familienspiel",
+    players: "1–4",
+    duration: 45,
+    plays: 12,
+    rating: 8.1,
+  },
+  {
+    id: "dune-imperium",
+    title: "Dune: Imperium",
+    category: "Kennerspiel",
+    players: "1–4",
+    duration: 90,
+    plays: 9,
+    rating: 8.6,
+  },
+  {
+    id: "quacks",
+    title: "Die Quacksalber von Quedlinburg",
+    category: "Push-your-luck",
+    players: "2–4",
+    duration: 45,
+    plays: 15,
+    rating: 8.0,
+  },
+];
+
+export const plays = [
+  {
+    id: "play-1",
+    game: "Cascadia",
+    date: "2026-07-10",
+    players: 3,
+    winner: "Basti",
+    duration: 42,
+    note: "Sehr knappe Partie, Naturplättchen waren entscheidend.",
+  },
+  {
+    id: "play-2",
+    game: "Dune: Imperium",
+    date: "2026-07-06",
+    players: 4,
+    winner: "Nina",
+    duration: 105,
+    note: "Starker Endspurt über Konfliktpunkte.",
+  },
+  {
+    id: "play-3",
+    game: "Die Quacksalber von Quedlinburg",
+    date: "2026-07-03",
+    players: 4,
+    winner: "Tom",
+    duration: 47,
+    note: "Viele Explosionen, trotzdem hoher Spaßfaktor.",
+  },
+];
+
+export const stats = {
+  totalGames: games.length,
+  totalPlays: plays.length,
+  averageDuration: Math.round(
+    plays.reduce((sum, play) => sum + play.duration, 0) / plays.length,
+  ),
+  favoriteGame: games.toSorted((a, b) => b.rating - a.rating)[0],
+  mostPlayedGame: games.toSorted((a, b) => b.plays - a.plays)[0],
+};

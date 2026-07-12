@@ -1,2 +1,4 @@
 MeepleMeter-site.zip
 .netlify/netlify.toml
+node_modules/
+dist/

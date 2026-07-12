@@ -1,16 +1,24 @@
 # MeepleMeter
 
-Statische Startseite für MeepleMeter.
+React-App für private Brettspielrunden: Sammlung verwalten, Partien tracken und Statistiken auswerten.
 
 ## Lokal ansehen
 
-Öffne `index.html` direkt im Browser oder starte einen lokalen Static-Server im Projektordner.
+```bash
+npm install
+npm run dev
+```
+
+## Build
+
+```bash
+npm run build
+```
 
 ## Netlify
 
 Die Seite ist für Netlify vorbereitet:
 
-- Publish directory: `.`
-- Build command: leer lassen
+- Build command: `npm run build`
+- Publish directory: `dist`
 - Konfiguration: `netlify.toml`
-

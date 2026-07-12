@@ -1,112 +1,12 @@
 <!doctype html>
 <html lang="de">
   <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>MeepleMeter – Startseite</title>
-    <link rel="stylesheet" href="styles.css" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MeepleMeter</title>
   </head>
   <body>
-    <header class="site-header">
-      <a class="brand" href="#" aria-label="MeepleMeter Startseite">
-        <span class="brand-mark">M</span>
-        <span>MeepleMeter</span>
-      </a>
-
-      <nav class="main-nav" aria-label="Hauptnavigation">
-        <a href="#funktionen">Funktionen</a>
-        <a href="#so-gehts">So geht's</a>
-        <a href="#vorteile">Vorteile</a>
-      </nav>
-
-      <div class="header-actions">
-        <a class="login-link" href="/login">Einloggen</a>
-        <a class="button button-small" href="/register">Kostenlos starten</a>
-      </div>
-    </header>
-
-    <main>
-      <section class="hero">
-        <div class="hero-content">
-          <p class="eyebrow">Für Brettspielrunden, Sammlungen und Bewertungen</p>
-          <h1>Behalte deine Spieleabende im Blick.</h1>
-          <p class="hero-copy">
-            MeepleMeter hilft dir, Partien zu dokumentieren, Spiele zu bewerten
-            und deine Sammlung übersichtlich zu verwalten.
-          </p>
-
-          <div class="hero-actions">
-            <a class="button" href="/register">Account erstellen</a>
-            <a class="button button-secondary" href="/login">Ich habe schon ein Konto</a>
-          </div>
-
-          <p class="trust-note">Noch nicht eingeloggt – starte direkt mit einem kostenlosen Konto.</p>
-        </div>
-
-        <div class="hero-card" aria-label="Beispielansicht">
-          <div class="card-header">
-            <span class="status-dot"></span>
-            <span>Letzter Spieleabend</span>
-          </div>
-          <div class="game-preview">
-            <div>
-              <p class="label">Spiel</p>
-              <strong>Waldreiche</strong>
-            </div>
-            <div>
-              <p class="label">Bewertung</p>
-              <strong>8,7 / 10</strong>
-            </div>
-          </div>
-          <div class="meter">
-            <span style="width: 87%"></span>
-          </div>
-          <ul class="stats-list">
-            <li><span>Partien</span><strong>42</strong></li>
-            <li><span>Mitspieler</span><strong>8</strong></li>
-            <li><span>Favoriten</span><strong>12</strong></li>
-          </ul>
-        </div>
-      </section>
-
-      <section id="funktionen" class="section">
-        <div class="section-heading">
-          <p class="eyebrow">Funktionen</p>
-          <h2>Alles für deine Brettspiel-Statistik.</h2>
-        </div>
-        <div class="feature-grid">
-          <article class="feature-card">
-            <h3>Partien erfassen</h3>
-            <p>Speichere Datum, Spieler, Ergebnis und persönliche Notizen pro Spieleabend.</p>
-          </article>
-          <article class="feature-card">
-            <h3>Bewertungen vergleichen</h3>
-            <p>Erkenne schnell, welche Spiele in deiner Runde wirklich gut ankommen.</p>
-          </article>
-          <article class="feature-card">
-            <h3>Sammlung organisieren</h3>
-            <p>Verwalte Besitz, Wunschliste und Favoriten an einem zentralen Ort.</p>
-          </article>
-        </div>
-      </section>
-
-      <section id="so-gehts" class="section split-section">
-        <div>
-          <p class="eyebrow">So geht's</p>
-          <h2>In drei Schritten startklar.</h2>
-        </div>
-        <ol class="steps">
-          <li><strong>Konto erstellen</strong><span>Registriere dich kostenlos.</span></li>
-          <li><strong>Spiel hinzufügen</strong><span>Lege dein erstes Spiel oder deine Sammlung an.</span></li>
-          <li><strong>Partie bewerten</strong><span>Dokumentiere Ergebnisse und Eindrücke.</span></li>
-        </ol>
-      </section>
-
-      <section id="vorteile" class="cta-section">
-        <h2>Bereit für messbar bessere Spieleabende?</h2>
-        <p>Erstelle dein Konto und baue deine persönliche MeepleMeter-Statistik auf.</p>
-        <a class="button" href="/register">Jetzt kostenlos starten</a>
-      </section>
-    </main>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
