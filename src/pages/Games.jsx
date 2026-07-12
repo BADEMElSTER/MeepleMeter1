@@ -362,6 +362,7 @@ function getCatalogResults(query, existingGames) {
     .filter((entry) => {
       const searchableText = [
         entry.name,
+        entry.aliases?.join(" "),
         entry.year,
         entry.bggId,
         entry.expansions?.map((expansion) => expansion.name).join(" "),
