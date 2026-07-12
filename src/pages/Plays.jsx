@@ -32,6 +32,9 @@ export default function Plays() {
   const [editingPlayId, setEditingPlayId] = useState(null);
   const [newPlayerName, setNewPlayerName] = useState("");
   const [form, setForm] = useState(getInitialForm(knownPlayerNames, games));
+  const selectablePlayerNames = [
+    ...new Set([...knownPlayerNames, ...form.participants.map((participant) => participant.name)]),
+  ];
 
   function getInitialForm(playerNames = knownPlayerNames, availableGames = games) {
     return {
@@ -239,7 +242,7 @@ export default function Plays() {
             </div>
 
             <div className="participant-options">
-              {knownPlayerNames.map((name) => {
+              {selectablePlayerNames.map((name) => {
                 const participant = form.participants.find((entry) => entry.name === name);
                 const isSelected = Boolean(participant);
 
@@ -269,6 +272,12 @@ export default function Plays() {
               <input
                 value={newPlayerName}
                 onChange={(event) => setNewPlayerName(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    addPlayerName();
+                  }
+                }}
                 placeholder="Neuer Mitspieler"
               />
               <button className="button button-secondary" type="button" onClick={addPlayerName}>
