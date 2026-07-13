@@ -394,29 +394,35 @@ h3 {
 }
 
 .app-shell {
-  display: grid;
-  grid-template-columns: 280px minmax(0, 1fr);
   min-height: 100vh;
 }
 
-.sidebar {
-  position: sticky;
+.app-topbar {
+  position: fixed;
   top: 0;
-  height: 100vh;
-  padding: 1.25rem;
-  border-right: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.72);
+  right: 0;
+  left: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 4.5rem;
+  padding: 0.8rem 2rem;
+  border-bottom: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.86);
   backdrop-filter: blur(18px);
 }
 
 .side-nav {
-  display: grid;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
   gap: 0.5rem;
-  margin-top: 2rem;
 }
 
 .side-nav a {
-  padding: 0.9rem 1rem;
+  padding: 0.7rem 0.9rem;
   border-radius: 1rem;
   color: var(--muted);
   font-weight: 800;
@@ -430,7 +436,7 @@ h3 {
 
 .app-main {
   min-width: 0;
-  padding: 2rem;
+  padding: 6.5rem 2rem 2rem;
 }
 
 .page {
@@ -961,7 +967,6 @@ dd {
   .hero,
   .split-section,
   .panel-grid,
-  .app-shell,
   .play-card {
     grid-template-columns: 1fr;
   }
@@ -975,13 +980,17 @@ dd {
     grid-template-columns: repeat(2, 1fr);
   }
 
-  .sidebar {
-    position: static;
-    height: auto;
+  .app-topbar {
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 0.8rem 1.25rem;
   }
 
   .side-nav {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    width: 100%;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 0.1rem;
   }
 }
 
@@ -991,7 +1000,6 @@ dd {
   .game-preview,
   .feature-grid,
   .metric-grid,
-  .side-nav,
   .row-heading,
   .form-header,
   .form-grid,
@@ -1007,7 +1015,16 @@ dd {
   }
 
   .app-main {
-    padding: 1.25rem;
+    padding: 7.75rem 1.25rem 1.25rem;
+  }
+
+  .app-topbar {
+    gap: 0.75rem;
+  }
+
+  .side-nav a {
+    white-space: nowrap;
+    padding: 0.65rem 0.75rem;
   }
 
   .button,

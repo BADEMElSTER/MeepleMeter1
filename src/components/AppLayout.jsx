@@ -3,7 +3,7 @@ import { NavLink, Outlet } from "react-router-dom";
 export default function AppLayout() {
   return (
     <div className="app-shell">
-      <aside className="sidebar">
+      <header className="app-topbar">
         <a className="brand" href="/" aria-label="MeepleMeter Startseite">
           <span className="brand-mark">M</span>
           <span>MeepleMeter</span>
@@ -14,7 +14,7 @@ export default function AppLayout() {
           <NavLink to="/plays">Partien</NavLink>
           <NavLink to="/stats">Statistiken</NavLink>
         </nav>
-      </aside>
+      </header>
       <main className="app-main">
         <Outlet />
       </main>
