@@ -6,6 +6,7 @@ import Games from "./pages/Games.jsx";
 import Home from "./pages/Home.jsx";
 import Login from "./pages/Login.jsx";
 import Plays from "./pages/Plays.jsx";
+import PlayerDetail from "./pages/PlayerDetail.jsx";
 import Register from "./pages/Register.jsx";
 import Stats from "./pages/Stats.jsx";
 
@@ -20,6 +21,7 @@ export default function App() {
         <Route path="/games" element={<Games />} />
         <Route path="/games/by-title/:gameTitle" element={<GameDetail />} />
         <Route path="/games/:gameId" element={<GameDetail />} />
+        <Route path="/players/:playerName" element={<PlayerDetail />} />
         <Route path="/plays" element={<Plays />} />
         <Route path="/stats" element={<Stats />} />
       </Route>

@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import GameLink from "../components/GameLink.jsx";
+import PlayerLink from "../components/PlayerLink.jsx";
 import { useAppData } from "../data/AppDataContext.jsx";
 
 export default function Dashboard() {
@@ -34,7 +35,9 @@ export default function Dashboard() {
                   </strong>
                   <span>{new Date(play.date).toLocaleDateString("de-DE")}</span>
                 </div>
-                <span>{play.winner}</span>
+                <span>
+                  <PlayerLink name={play.winner}>{play.winner}</PlayerLink>
+                </span>
               </div>
             ))}
           </div>

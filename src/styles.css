@@ -509,12 +509,14 @@ dt,
 
 .panel-header a,
 .auth-switch a,
-.game-link {
+.game-link,
+.player-link {
   color: var(--primary-dark);
   font-weight: 900;
 }
 
-.game-link:hover {
+.game-link:hover,
+.player-link:hover {
   text-decoration: underline;
 }
 
@@ -527,7 +529,8 @@ dt,
   padding: 1rem;
 }
 
-.highlight-panel .game-link {
+.highlight-panel .game-link,
+.highlight-panel .player-link {
   color: #fff;
 }
 

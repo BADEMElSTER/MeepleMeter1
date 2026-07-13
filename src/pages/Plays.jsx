@@ -1,6 +1,7 @@
 import { useState } from "react";
 import Field from "../components/Field.jsx";
 import GameLink from "../components/GameLink.jsx";
+import PlayerLink from "../components/PlayerLink.jsx";
 import { useAppData } from "../data/AppDataContext.jsx";
 
 const defaultPlayerNames = ["Basti", "Nina", "Tom", "Lea"];
@@ -349,7 +350,7 @@ export default function Plays() {
               <div className="participant-summary">
                 {(play.participants ?? []).map((participant) => (
                   <span key={participant.name}>
-                    {participant.name}
+                    <PlayerLink name={participant.name}>{participant.name}</PlayerLink>
                     {play.scoringMode !== "none" && participant.score !== null
                       ? ` · ${participant.score} P.`
                       : ""}
@@ -382,7 +383,9 @@ export default function Plays() {
               </div>
               <div>
                 <dt>Gewinner</dt>
-                <dd>{play.winner}</dd>
+                <dd>
+                  <PlayerLink name={play.winner}>{play.winner}</PlayerLink>
+                </dd>
               </div>
               <div>
                 <dt>Dauer</dt>

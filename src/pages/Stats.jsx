@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import GameLink from "../components/GameLink.jsx";
+import PlayerLink from "../components/PlayerLink.jsx";
 import { useAppData } from "../data/AppDataContext.jsx";
 
 const tabs = [
@@ -47,7 +48,7 @@ function PersonalStats({ analytics }) {
     <>
       <div className="metric-grid">
         <Metric label="Aktive Mitspieler" value={analytics.players.length} />
-        <Metric label="Häufigster Spieler" value={analytics.topPlayer?.name ?? "–"} />
+        <Metric label="Häufigster Spieler" value={<PlayerLink name={analytics.topPlayer?.name}>{analytics.topPlayer?.name ?? "–"}</PlayerLink>} />
         <Metric label="Beste Gewinnquote" value={formatPercent(analytics.bestWinRate?.winRate)} />
         <Metric label="Ø Platzierung" value={formatPlacement(analytics.averagePlacement)} />
       </div>
@@ -62,6 +63,7 @@ function PersonalStats({ analytics }) {
                 label={player.name}
                 meta={`${player.plays} Partien · ${player.wins} Siege`}
                 percent={(player.plays / maxPlays) * 100}
+                playerName={player.name}
               />
             ))}
             {!analytics.players.length && <p className="empty-hint">Noch keine Mitspieler erfasst.</p>}
@@ -74,7 +76,9 @@ function PersonalStats({ analytics }) {
             {analytics.players.slice(0, 8).map((player) => (
               <div className="list-row" key={player.name}>
                 <div>
-                  <strong>{player.name}</strong>
+                  <strong>
+                    <PlayerLink name={player.name}>{player.name}</PlayerLink>
+                  </strong>
                   <span>
                     {formatPercent(player.winRate)} Gewinnquote · Ø Platz {formatPlacement(player.averagePlacement)}
                   </span>
@@ -223,7 +227,9 @@ function GroupStats({ analytics }) {
             {analytics.latestWinners.map((play) => (
               <div className="list-row" key={play.id}>
                 <div>
-                  <strong>{play.winner}</strong>
+                  <strong>
+                    <PlayerLink name={play.winner}>{play.winner}</PlayerLink>
+                  </strong>
                   <span>
                     <GameLink gameId={play.gameId} title={play.game} /> ·{" "}
                     {new Date(play.date).toLocaleDateString("de-DE")}
@@ -248,12 +254,14 @@ function Metric({ label, value }) {
   );
 }
 
-function ChartRow({ gameId, label, meta, percent }) {
+function ChartRow({ gameId, playerName, label, meta, percent }) {
   return (
     <div className="chart-row">
       <div>
         <strong>
-          {gameId ? <GameLink gameId={gameId}>{label}</GameLink> : label}
+          {gameId ? <GameLink gameId={gameId}>{label}</GameLink> : null}
+          {playerName ? <PlayerLink name={playerName}>{label}</PlayerLink> : null}
+          {!gameId && !playerName ? label : null}
         </strong>
         <span>{meta}</span>
       </div>
@@ -480,9 +488,21 @@ function formatPlacement(value) {
 }
 
 function formatPlayerStat(player, key, label) {
-  return player ? `${player.name} (${player[key]} ${label})` : "–";
+  return player ? (
+    <>
+      <PlayerLink name={player.name}>{player.name}</PlayerLink> ({player[key]} {label})
+    </>
+  ) : (
+    "–"
+  );
 }
 
 function formatPlacementPlayer(player) {
-  return player ? `${player.name} (Ø Platz ${formatPlacement(player.averagePlacement)})` : "–";
+  return player ? (
+    <>
+      <PlayerLink name={player.name}>{player.name}</PlayerLink> (Ø Platz {formatPlacement(player.averagePlacement)})
+    </>
+  ) : (
+    "–"
+  );
 }

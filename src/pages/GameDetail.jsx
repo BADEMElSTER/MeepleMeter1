@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
 import GameLink from "../components/GameLink.jsx";
+import PlayerLink from "../components/PlayerLink.jsx";
 import { useAppData } from "../data/AppDataContext.jsx";
 
 export default function GameDetail() {
@@ -64,8 +65,8 @@ function OverviewTab({ game, statistics }) {
       <div className="metric-grid">
         <Metric label="Gespielte Partien" value={statistics.playCount} />
         <Metric label="Ø Spieldauer" value={formatMinutes(statistics.averageDuration)} />
-        <Metric label="Häufigster Sieger" value={formatPlayer(statistics.mostWinsPlayer)} />
-        <Metric label="Häufigster Verlierer" value={formatPlayer(statistics.mostLossesPlayer)} />
+        <Metric label="Häufigster Sieger" value={<PlayerLink name={statistics.mostWinsPlayer?.name}>{formatPlayer(statistics.mostWinsPlayer)}</PlayerLink>} />
+        <Metric label="Häufigster Verlierer" value={<PlayerLink name={statistics.mostLossesPlayer?.name}>{formatPlayer(statistics.mostLossesPlayer)}</PlayerLink>} />
       </div>
 
       <div className="panel-grid">
@@ -117,7 +118,9 @@ function PlayersTab({ statistics }) {
           {statistics.players.map((player) => (
             <tr key={player.name}>
               <td>
-                <strong>{player.name}</strong>
+                <strong>
+                  <PlayerLink name={player.name}>{player.name}</PlayerLink>
+                </strong>
               </td>
               <td>{player.plays}</td>
               <td>{player.wins}</td>
@@ -142,7 +145,7 @@ function PlaysTab({ statistics }) {
             <div>
               <strong>{new Date(play.date).toLocaleDateString("de-DE")}</strong>
               <span>
-                Gewinner: {play.winner} · {play.players} Spieler · {formatMinutes(play.duration)}
+                Gewinner: <PlayerLink name={play.winner}>{play.winner}</PlayerLink> · {play.players} Spieler · {formatMinutes(play.duration)}
               </span>
             </div>
           </div>
