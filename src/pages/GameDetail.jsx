@@ -3,9 +3,13 @@ import GameLink from "../components/GameLink.jsx";
 import { useAppData } from "../data/AppDataContext.jsx";
 
 export default function GameDetail() {
-  const { gameId } = useParams();
+  const { gameId, gameTitle } = useParams();
   const { games, plays } = useAppData();
-  const game = games.find((entry) => entry.id === gameId);
+  const decodedTitle = gameTitle ? decodeURIComponent(gameTitle) : "";
+  const game =
+    games.find((entry) => entry.id === gameId) ??
+    games.find((entry) => normalizeTitle(entry.title) === normalizeTitle(decodedTitle)) ??
+    buildVirtualGame(decodedTitle, plays);
 
   if (!game) {
     return <Navigate to="/games" replace />;
@@ -112,7 +116,11 @@ function InfoRow({ label, value }) {
 
 function buildGameStatistics(game, plays) {
   const matchingPlays = plays
-    .filter((play) => play.gameId === game.id || play.game === game.title)
+    .filter(
+      (play) =>
+        play.gameId === game.id ||
+        normalizeTitle(play.game) === normalizeTitle(game.title),
+    )
     .toSorted((first, second) => new Date(second.date) - new Date(first.date));
   const playerMap = new Map();
   const totalDuration = matchingPlays.reduce((sum, play) => sum + Number(play.duration || 0), 0);
@@ -217,4 +225,32 @@ function formatPlacement(value) {
 
 function formatPlayer(player) {
   return player?.name ?? "–";
+}
+
+function buildVirtualGame(title, plays) {
+  if (!title) {
+    return null;
+  }
+
+  const matchingPlays = plays.filter((play) => normalizeTitle(play.game) === normalizeTitle(title));
+
+  if (!matchingPlays.length) {
+    return null;
+  }
+
+  return {
+    id: null,
+    title,
+    category: "Aus Partien",
+    minPlayers: Math.min(...matchingPlays.map((play) => Number(play.players) || 1)),
+    maxPlayers: Math.max(...matchingPlays.map((play) => Number(play.players) || 1)),
+    duration: Math.round(
+      matchingPlays.reduce((sum, play) => sum + Number(play.duration || 0), 0) / matchingPlays.length,
+    ),
+    expansions: [],
+  };
+}
+
+function normalizeTitle(title = "") {
+  return String(title).trim().toLowerCase();
 }
