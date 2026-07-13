@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import GameLink from "../components/GameLink.jsx";
 import { useAppData } from "../data/AppDataContext.jsx";
 
 export default function Dashboard() {
@@ -15,7 +16,7 @@ export default function Dashboard() {
         <Metric label="Spiele in Sammlung" value={stats.totalGames} />
         <Metric label="Erfasste Partien" value={stats.totalPlays} />
         <Metric label="Ø gespielte Dauer" value={`${stats.averageDuration} Min.`} />
-        <Metric label="Meistgespielt" value={stats.mostPlayedGame.title} />
+        <Metric label="Meistgespielt" value={<GameLink gameId={stats.mostPlayedGame.id}>{stats.mostPlayedGame.title}</GameLink>} />
       </div>
 
       <div className="panel-grid">
@@ -28,7 +29,9 @@ export default function Dashboard() {
             {plays.map((play) => (
               <div className="list-row" key={play.id}>
                 <div>
-                  <strong>{play.game}</strong>
+                  <strong>
+                    <GameLink gameId={play.gameId} title={play.game} />
+                  </strong>
                   <span>{new Date(play.date).toLocaleDateString("de-DE")}</span>
                 </div>
                 <span>{play.winner}</span>
@@ -39,7 +42,9 @@ export default function Dashboard() {
 
         <article className="panel highlight-panel">
           <p className="eyebrow">Empfehlung</p>
-          <h2>{stats.mostPlayedGame.title}</h2>
+          <h2>
+            <GameLink gameId={stats.mostPlayedGame.id}>{stats.mostPlayedGame.title}</GameLink>
+          </h2>
           <p>
             Aktuell das meistgespielte Spiel deiner Runde mit{" "}
             {stats.mostPlayedGame.plays} Partien.

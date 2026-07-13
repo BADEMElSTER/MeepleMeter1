@@ -1,5 +1,6 @@
 import { useState } from "react";
 import Field from "../components/Field.jsx";
+import GameLink from "../components/GameLink.jsx";
 import { useAppData } from "../data/AppDataContext.jsx";
 
 const defaultPlayerNames = ["Basti", "Nina", "Tom", "Lea"];
@@ -341,7 +342,9 @@ export default function Plays() {
           <article className="play-card" key={play.id}>
             <div>
               <span>{new Date(play.date).toLocaleDateString("de-DE")}</span>
-              <h2>{play.game}</h2>
+              <h2>
+                <GameLink gameId={play.gameId} title={play.game} />
+              </h2>
               <p>{play.note}</p>
               <div className="participant-summary">
                 {(play.participants ?? []).map((participant) => (

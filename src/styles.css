@@ -502,9 +502,18 @@ dt,
 }
 
 .panel-header a,
-.auth-switch a {
+.auth-switch a,
+.game-link {
   color: var(--primary-dark);
   font-weight: 900;
+}
+
+.game-link:hover {
+  text-decoration: underline;
+}
+
+.highlight-panel .game-link {
+  color: #fff;
 }
 
 .stats-tabs {

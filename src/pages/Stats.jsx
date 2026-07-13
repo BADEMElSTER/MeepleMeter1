@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import GameLink from "../components/GameLink.jsx";
 import { useAppData } from "../data/AppDataContext.jsx";
 
 const tabs = [
@@ -77,8 +78,18 @@ function PersonalStats({ analytics }) {
                   <span>
                     {formatPercent(player.winRate)} Gewinnquote · Ø Platz {formatPlacement(player.averagePlacement)}
                   </span>
-                  <span>Beste Platzierung: {player.bestPlacementGame?.title ?? "–"}</span>
-                  <span>Häufigstes Spiel: {player.mostPlayedGame?.title ?? "–"}</span>
+                  <span>
+                    Beste Platzierung:{" "}
+                    <GameLink title={player.bestPlacementGame?.title}>
+                      {player.bestPlacementGame?.title ?? "–"}
+                    </GameLink>
+                  </span>
+                  <span>
+                    Häufigstes Spiel:{" "}
+                    <GameLink title={player.mostPlayedGame?.title}>
+                      {player.mostPlayedGame?.title ?? "–"}
+                    </GameLink>
+                  </span>
                 </div>
                 <span>{player.wins} Siege</span>
               </div>
@@ -118,7 +129,9 @@ function GameStats({ analytics }) {
             {analytics.gameDetails.map((game) => (
               <tr key={game.id}>
                 <td>
-                  <strong>{game.title}</strong>
+                  <strong>
+                    <GameLink gameId={game.id}>{game.title}</GameLink>
+                  </strong>
                 </td>
                 <td>{game.plays}</td>
                 <td>{formatPlayerStat(game.mostWinsPlayer, "wins", "Siege")}</td>
@@ -143,7 +156,14 @@ function GroupStats({ analytics }) {
         <Metric label="Erfasste Partien" value={analytics.totalPlays} />
         <Metric label="Gespielte Spiele" value={analytics.playedGames} />
         <Metric label="Ungespielte Spiele" value={analytics.unplayedGames} />
-        <Metric label="Meistgespielt" value={analytics.mostPlayedGame?.title ?? "–"} />
+        <Metric
+          label="Meistgespielt"
+          value={
+            <GameLink gameId={analytics.mostPlayedGame?.id}>
+              {analytics.mostPlayedGame?.title ?? "–"}
+            </GameLink>
+          }
+        />
       </div>
 
       <div className="panel-grid">
@@ -152,6 +172,7 @@ function GroupStats({ analytics }) {
           <div className="chart-list">
             {analytics.games.map((game) => (
               <ChartRow
+                gameId={game.id}
                 key={game.id}
                 label={game.title}
                 meta={`${game.plays} Partien · Ø ${formatMinutes(game.averagePlayedDuration)}`}
@@ -167,7 +188,9 @@ function GroupStats({ analytics }) {
             {analytics.unplayedGameList.slice(0, 8).map((game) => (
               <div className="list-row" key={game.id}>
                 <div>
-                  <strong>{game.title}</strong>
+                  <strong>
+                    <GameLink gameId={game.id}>{game.title}</GameLink>
+                  </strong>
                   <span>
                     {game.minPlayers}–{game.maxPlayers} Spieler · {game.duration} Min.
                   </span>
@@ -202,7 +225,8 @@ function GroupStats({ analytics }) {
                 <div>
                   <strong>{play.winner}</strong>
                   <span>
-                    {play.game} · {new Date(play.date).toLocaleDateString("de-DE")}
+                    <GameLink gameId={play.gameId} title={play.game} /> ·{" "}
+                    {new Date(play.date).toLocaleDateString("de-DE")}
                   </span>
                 </div>
               </div>
@@ -224,11 +248,13 @@ function Metric({ label, value }) {
   );
 }
 
-function ChartRow({ label, meta, percent }) {
+function ChartRow({ gameId, label, meta, percent }) {
   return (
     <div className="chart-row">
       <div>
-        <strong>{label}</strong>
+        <strong>
+          {gameId ? <GameLink gameId={gameId}>{label}</GameLink> : label}
+        </strong>
         <span>{meta}</span>
       </div>
       <div className="bar">

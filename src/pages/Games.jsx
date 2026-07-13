@@ -1,5 +1,6 @@
 import { useState } from "react";
 import Field from "../components/Field.jsx";
+import GameLink from "../components/GameLink.jsx";
 import { useAppData } from "../data/AppDataContext.jsx";
 import { gameCatalog } from "../data/gameCatalog.js";
 
@@ -314,7 +315,9 @@ export default function Games() {
             {games.map((game) => (
               <tr key={game.id}>
                 <td>
-                  <strong>{game.title}</strong>
+                  <strong>
+                    <GameLink gameId={game.id}>{game.title}</GameLink>
+                  </strong>
                 </td>
                 <td>{game.category}</td>
                 <td>{game.catalogYear ?? "–"}</td>
