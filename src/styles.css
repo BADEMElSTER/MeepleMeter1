@@ -512,6 +512,15 @@ dt,
   text-decoration: underline;
 }
 
+.game-title-cell {
+  padding: 0;
+}
+
+.game-title-cell .game-link {
+  display: block;
+  padding: 1rem;
+}
+
 .highlight-panel .game-link {
   color: #fff;
 }

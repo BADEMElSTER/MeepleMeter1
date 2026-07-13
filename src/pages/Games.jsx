@@ -314,7 +314,7 @@ export default function Games() {
           <tbody>
             {games.map((game) => (
               <tr key={game.id}>
-                <td>
+                <td className="game-title-cell">
                   <strong>
                     <GameLink gameId={game.id}>{game.title}</GameLink>
                   </strong>
