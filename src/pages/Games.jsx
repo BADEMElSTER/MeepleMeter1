@@ -32,6 +32,26 @@ const sortableColumns = [
   { key: "plays", label: "Partien", type: "number" },
 ];
 
+const commonCategories = [
+  "Familienspiel",
+  "Kennerspiel",
+  "Expertenspiel",
+  "Partyspiel",
+  "Kinderspiel",
+  "Kartenspiel",
+  "Würfelspiel",
+  "Kooperativ",
+  "Deduktion",
+  "Deckbuilding",
+  "Worker Placement",
+  "Push-your-luck",
+  "Strategiespiel",
+  "Absacker",
+  "Computer",
+];
+
+const customCategoryValue = "__custom__";
+
 function getGameForm(game) {
   return {
     title: game.title,
@@ -60,6 +80,9 @@ export default function Games() {
   const [catalogQuery, setCatalogQuery] = useState("");
   const [formMessage, setFormMessage] = useState("");
   const catalogResults = getCatalogResults(catalogQuery, stats.gamesWithPlayCounts);
+  const categorySelectValue = commonCategories.includes(form.category)
+    ? form.category
+    : customCategoryValue;
 
   function updateField(field, value) {
     setForm((currentForm) => ({ ...currentForm, [field]: value }));
@@ -115,6 +138,18 @@ export default function Games() {
       expansions: (entry.expansions ?? []).map((expansion) => expansion.name).join(", "),
     });
     setFormMessage(`Katalogdaten für "${entry.name}" übernommen. Bitte prüfen und speichern.`);
+  }
+
+  function updateCategorySelection(value) {
+    if (value === customCategoryValue) {
+      setForm((currentForm) => ({
+        ...currentForm,
+        category: commonCategories.includes(currentForm.category) ? "" : currentForm.category,
+      }));
+      return;
+    }
+
+    updateField("category", value);
   }
 
   function handleSubmit(event) {
@@ -232,12 +267,27 @@ export default function Games() {
               />
             </Field>
             <Field label="Kategorie">
-              <input
-                value={form.category}
-                onChange={(event) => updateField("category", event.target.value)}
-                placeholder="Kennerspiel"
-              />
+              <select
+                value={categorySelectValue}
+                onChange={(event) => updateCategorySelection(event.target.value)}
+              >
+                {commonCategories.map((category) => (
+                  <option key={category} value={category}>
+                    {category}
+                  </option>
+                ))}
+                <option value={customCategoryValue}>Eigene Kategorie</option>
+              </select>
             </Field>
+            {categorySelectValue === customCategoryValue && (
+              <Field label="Eigene Kategorie">
+                <input
+                  value={form.category}
+                  onChange={(event) => updateField("category", event.target.value)}
+                  placeholder="z. B. Roll & Write"
+                />
+            </Field>
+            )}
             <Field label="Min. Spieler">
               <input
                 min="1"
