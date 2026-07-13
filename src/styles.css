@@ -507,6 +507,33 @@ dt,
   font-weight: 900;
 }
 
+.stats-tabs {
+  display: inline-flex;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+  padding: 0.35rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.74);
+}
+
+.stats-tabs button {
+  padding: 0.75rem 1rem;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 900;
+}
+
+.stats-tabs button.active,
+.stats-tabs button:hover {
+  background: var(--primary);
+  color: var(--text);
+}
+
 .list {
   display: grid;
   gap: 0.7rem;
@@ -838,6 +865,16 @@ dd {
 
 .bar {
   height: 0.8rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--surface-muted);
+}
+
+.bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--primary), #f97316);
 }
 
 .auth-page {
