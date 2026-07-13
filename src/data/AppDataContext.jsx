@@ -118,16 +118,28 @@ function buildPlay(playInput, games, existingPlay = {}) {
   };
 }
 
+function normalizePlayerProfile(profile) {
+  return {
+    name: profile.name?.trim() ?? "",
+    favoriteGame: profile.favoriteGame?.trim() ?? "",
+    favoriteColor: profile.favoriteColor?.trim() ?? "",
+    notes: profile.notes?.trim() ?? "",
+  };
+}
+
 export function AppDataProvider({ children }) {
   const storedData = loadStoredData();
   const [games, setGames] = useState(() =>
     (storedData?.games ?? initialGames).map(normalizeGame),
   );
   const [plays, setPlays] = useState(() => storedData?.plays ?? initialPlays);
+  const [playerProfiles, setPlayerProfiles] = useState(() =>
+    (storedData?.playerProfiles ?? []).map(normalizePlayerProfile),
+  );
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ games, plays }));
-  }, [games, plays]);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ games, plays, playerProfiles }));
+  }, [games, plays, playerProfiles]);
 
   const stats = useMemo(() => {
     const totalDuration = plays.reduce((sum, play) => sum + Number(play.duration), 0);
@@ -249,10 +261,34 @@ export function AppDataProvider({ children }) {
     setPlays((currentPlays) => currentPlays.filter((play) => play.id !== playId));
   }
 
+  function updatePlayerProfile(playerName, profileInput) {
+    const normalizedProfile = normalizePlayerProfile({
+      ...profileInput,
+      name: playerName,
+    });
+
+    setPlayerProfiles((currentProfiles) => {
+      const existingProfile = currentProfiles.find(
+        (profile) => profile.name.toLowerCase() === playerName.trim().toLowerCase(),
+      );
+
+      if (existingProfile) {
+        return currentProfiles.map((profile) =>
+          profile.name.toLowerCase() === playerName.trim().toLowerCase()
+            ? normalizedProfile
+            : profile,
+        );
+      }
+
+      return [normalizedProfile, ...currentProfiles];
+    });
+  }
+
   const value = useMemo(
     () => ({
       games,
       plays,
+      playerProfiles,
       stats,
       addGame,
       updateGame,
@@ -260,8 +296,9 @@ export function AppDataProvider({ children }) {
       addPlay,
       updatePlay,
       deletePlay,
+      updatePlayerProfile,
     }),
-    [games, plays, stats],
+    [games, plays, playerProfiles, stats],
   );
 
   return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>;

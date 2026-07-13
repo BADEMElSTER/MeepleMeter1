@@ -1,14 +1,19 @@
 import { useMemo, useState } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
+import Field from "../components/Field.jsx";
 import GameLink from "../components/GameLink.jsx";
 import PlayerLink from "../components/PlayerLink.jsx";
 import { useAppData } from "../data/AppDataContext.jsx";
 
 export default function PlayerDetail() {
   const { playerName } = useParams();
-  const { games, plays } = useAppData();
+  const { games, plays, playerProfiles, updatePlayerProfile } = useAppData();
   const decodedName = playerName ? decodeURIComponent(playerName) : "";
-  const statistics = useMemo(() => buildPlayerStatistics(decodedName, games, plays), [decodedName, games, plays]);
+  const profile = playerProfiles.find((entry) => sameName(entry.name, decodedName)) ?? null;
+  const statistics = useMemo(
+    () => buildPlayerStatistics(decodedName, games, plays, profile),
+    [decodedName, games, plays, profile],
+  );
   const [activeTab, setActiveTab] = useState("info");
   const tabs = [
     { id: "info", label: "Allgemein" },
@@ -45,34 +50,102 @@ export default function PlayerDetail() {
         ))}
       </div>
 
-      {activeTab === "info" && <InfoTab statistics={statistics} />}
+      {activeTab === "info" && (
+        <InfoTab
+          games={games}
+          statistics={statistics}
+          updatePlayerProfile={updatePlayerProfile}
+        />
+      )}
       {activeTab === "stats" && <StatsTab statistics={statistics} />}
       {activeTab === "plays" && <PlaysTab statistics={statistics} />}
     </section>
   );
 }
 
-function InfoTab({ statistics }) {
+function InfoTab({ games, statistics, updatePlayerProfile }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [form, setForm] = useState({
+    favoriteGame: statistics.profile.favoriteGame,
+    favoriteColor: statistics.profile.favoriteColor,
+    notes: statistics.profile.notes,
+  });
+
+  function updateField(field, value) {
+    setForm((currentForm) => ({ ...currentForm, [field]: value }));
+  }
+
+  function handleSubmit(event) {
+    event.preventDefault();
+    updatePlayerProfile(statistics.name, form);
+    setIsEditing(false);
+  }
+
   return (
     <>
       <div className="metric-grid">
+        <Metric label="Lieblingsspiel" value={<GameLink title={statistics.profile.favoriteGame}>{statistics.profile.favoriteGame || "–"}</GameLink>} />
+        <Metric label="Lieblingsfarbe" value={statistics.profile.favoriteColor || "–"} />
         <Metric label="Partien insgesamt" value={statistics.totalPlays} />
-        <Metric label="Siege" value={statistics.wins} />
-        <Metric label="Ø Platzierung" value={formatPlacement(statistics.averagePlacement)} />
         <Metric label="Häufigstes Spiel" value={<GameLink title={statistics.mostPlayedGame?.title}>{statistics.mostPlayedGame?.title ?? "–"}</GameLink>} />
       </div>
 
-      <article className="panel highlight-panel">
-        <p className="eyebrow">Spieler</p>
-        <h2>
-          <PlayerLink name={statistics.name}>{statistics.name}</PlayerLink>
-        </h2>
-        <p>
-          {statistics.totalPlays
-            ? `${statistics.totalPlays} Partien erfasst, davon ${statistics.wins} Siege.`
-            : "Für diesen Spieler wurden noch keine Partien erfasst."}
-        </p>
-      </article>
+      {isEditing ? (
+        <form className="entry-form" onSubmit={handleSubmit}>
+          <div className="form-header">
+            <div>
+              <p className="eyebrow">Profil bearbeiten</p>
+              <h2>Allgemeine Spielerinformationen.</h2>
+            </div>
+            <button className="ghost-button" type="button" onClick={() => setIsEditing(false)}>
+              Abbrechen
+            </button>
+          </div>
+          <div className="form-grid">
+            <Field label="Lieblingsspiel">
+              <input
+                list="player-favorite-games"
+                value={form.favoriteGame}
+                onChange={(event) => updateField("favoriteGame", event.target.value)}
+                placeholder="z. B. Arche Nova"
+              />
+              <datalist id="player-favorite-games">
+                {games.map((game) => (
+                  <option key={game.id} value={game.title} />
+                ))}
+              </datalist>
+            </Field>
+            <Field label="Lieblingsfarbe">
+              <input
+                value={form.favoriteColor}
+                onChange={(event) => updateField("favoriteColor", event.target.value)}
+                placeholder="z. B. Blau"
+              />
+            </Field>
+            <Field label="Notizen">
+              <textarea
+                value={form.notes}
+                onChange={(event) => updateField("notes", event.target.value)}
+                placeholder="Spielstil, Vorlieben, Besonderheiten"
+              />
+            </Field>
+          </div>
+          <button className="button" type="submit">
+            Spielerprofil speichern
+          </button>
+        </form>
+      ) : (
+        <article className="panel highlight-panel">
+          <p className="eyebrow">Spielerprofil</p>
+          <h2>
+            <PlayerLink name={statistics.name}>{statistics.name}</PlayerLink>
+          </h2>
+          <p>{statistics.profile.notes || "Noch keine Notizen zum Spieler erfasst."}</p>
+          <button className="button button-secondary" type="button" onClick={() => setIsEditing(true)}>
+            Allgemeine Infos bearbeiten
+          </button>
+        </article>
+      )}
     </>
   );
 }
@@ -156,7 +229,7 @@ function InfoRow({ label, value }) {
   );
 }
 
-function buildPlayerStatistics(name, games, plays) {
+function buildPlayerStatistics(name, games, plays, profile) {
   const playerName = name.trim();
 
   if (!playerName) {
@@ -214,6 +287,11 @@ function buildPlayerStatistics(name, games, plays) {
 
   return {
     name: playerName,
+    profile: {
+      favoriteGame: profile?.favoriteGame ?? "",
+      favoriteColor: profile?.favoriteColor ?? "",
+      notes: profile?.notes ?? "",
+    },
     totalPlays: matchingPlays.length,
     wins,
     averagePlacement: placementCount ? totalPlacement / placementCount : null,
