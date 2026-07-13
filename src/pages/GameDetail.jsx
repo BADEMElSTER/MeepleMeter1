@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
 import GameLink from "../components/GameLink.jsx";
 import { useAppData } from "../data/AppDataContext.jsx";
@@ -5,6 +6,7 @@ import { useAppData } from "../data/AppDataContext.jsx";
 export default function GameDetail() {
   const { gameId, gameTitle } = useParams();
   const { games, plays } = useAppData();
+  const [activeTab, setActiveTab] = useState("overview");
   const decodedTitle = gameTitle ? decodeURIComponent(gameTitle) : "";
   const game =
     games.find((entry) => entry.id === gameId) ??
@@ -16,6 +18,11 @@ export default function GameDetail() {
   }
 
   const statistics = buildGameStatistics(game, plays);
+  const tabs = [
+    { id: "overview", label: "Übersicht" },
+    { id: "players", label: "Spieler" },
+    { id: "plays", label: "Partien" },
+  ];
 
   return (
     <section className="page">
@@ -29,51 +36,39 @@ export default function GameDetail() {
         </Link>
       </div>
 
+      <div className="stats-tabs detail-tabs" role="tablist" aria-label="Spielstatistikbereiche">
+        {tabs.map((tab) => (
+          <button
+            className={activeTab === tab.id ? "active" : ""}
+            key={tab.id}
+            type="button"
+            onClick={() => setActiveTab(tab.id)}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === "overview" && <OverviewTab game={game} statistics={statistics} />}
+      {activeTab === "players" && <PlayersTab statistics={statistics} />}
+      {activeTab === "plays" && <PlaysTab statistics={statistics} />}
+    </section>
+  );
+}
+
+function OverviewTab({ game, statistics }) {
+  return (
+    <>
       <div className="metric-grid">
         <Metric label="Gespielte Partien" value={statistics.playCount} />
         <Metric label="Ø Spieldauer" value={formatMinutes(statistics.averageDuration)} />
-        <Metric label="Häufigster Gewinner" value={formatPlayer(statistics.mostWinsPlayer)} />
+        <Metric label="Häufigster Sieger" value={formatPlayer(statistics.mostWinsPlayer)} />
         <Metric label="Häufigster Verlierer" value={formatPlayer(statistics.mostLossesPlayer)} />
       </div>
 
       <div className="panel-grid">
         <article className="panel">
-          <h2>Spielerbilanz</h2>
-          <div className="list">
-            {statistics.players.map((player) => (
-              <div className="list-row" key={player.name}>
-                <div>
-                  <strong>{player.name}</strong>
-                  <span>
-                    {player.plays} Partien · {player.wins} Siege · {player.losses} Niederlagen
-                  </span>
-                </div>
-                <span>Ø Platz {formatPlacement(player.averagePlacement)}</span>
-              </div>
-            ))}
-            {!statistics.players.length && <p className="empty-hint">Für dieses Spiel gibt es noch keine Partien.</p>}
-          </div>
-        </article>
-
-        <article className="panel">
-          <h2>Letzte Partien</h2>
-          <div className="list">
-            {statistics.plays.map((play) => (
-              <div className="list-row" key={play.id}>
-                <div>
-                  <strong>{new Date(play.date).toLocaleDateString("de-DE")}</strong>
-                  <span>
-                    Gewinner: {play.winner} · {play.players} Spieler · {formatMinutes(play.duration)}
-                  </span>
-                </div>
-              </div>
-            ))}
-            {!statistics.plays.length && <p className="empty-hint">Noch keine Partie erfasst.</p>}
-          </div>
-        </article>
-
-        <article className="panel">
-          <h2>Spielinfo</h2>
+          <h2>Allgemeine Spielinformationen</h2>
           <div className="list">
             <InfoRow label="Kategorie" value={game.category} />
             <InfoRow label="Spielerzahl" value={`${game.minPlayers}–${game.maxPlayers}`} />
@@ -83,14 +78,72 @@ export default function GameDetail() {
         </article>
 
         <article className="panel highlight-panel">
-          <p className="eyebrow">Direktlink</p>
+          <p className="eyebrow">Kurzfazit</p>
           <h2>
-            <GameLink gameId={game.id}>{game.title}</GameLink>
+            <GameLink gameId={game.id} title={game.title}>{game.title}</GameLink>
           </h2>
-          <p>Jeder Spielname in der App führt künftig auf diese Auswertung.</p>
+          <p>
+            {statistics.playCount
+              ? `${statistics.playCount} Partien erfasst. Durchschnittliche Dauer: ${formatMinutes(statistics.averageDuration)}.`
+              : "Für dieses Spiel wurden noch keine Partien erfasst."}
+          </p>
         </article>
       </div>
-    </section>
+    </>
+  );
+}
+
+function PlayersTab({ statistics }) {
+  return (
+    <article className="table-card">
+      <h2>Spielerstatistiken</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Spieler</th>
+            <th>Partien</th>
+            <th>Siege</th>
+            <th>Niederlagen</th>
+            <th>Ø Platz</th>
+          </tr>
+        </thead>
+        <tbody>
+          {statistics.players.map((player) => (
+            <tr key={player.name}>
+              <td>
+                <strong>{player.name}</strong>
+              </td>
+              <td>{player.plays}</td>
+              <td>{player.wins}</td>
+              <td>{player.losses}</td>
+              <td>{formatPlacement(player.averagePlacement)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {!statistics.players.length && <p className="empty-hint">Für dieses Spiel gibt es noch keine Partien.</p>}
+    </article>
+  );
+}
+
+function PlaysTab({ statistics }) {
+  return (
+    <article className="panel">
+      <h2>Partien dieses Spiels</h2>
+      <div className="list">
+        {statistics.plays.map((play) => (
+          <div className="list-row" key={play.id}>
+            <div>
+              <strong>{new Date(play.date).toLocaleDateString("de-DE")}</strong>
+              <span>
+                Gewinner: {play.winner} · {play.players} Spieler · {formatMinutes(play.duration)}
+              </span>
+            </div>
+          </div>
+        ))}
+        {!statistics.plays.length && <p className="empty-hint">Noch keine Partie erfasst.</p>}
+      </div>
+    </article>
   );
 }
 
