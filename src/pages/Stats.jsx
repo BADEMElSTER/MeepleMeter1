@@ -48,7 +48,7 @@ function PersonalStats({ analytics }) {
         <Metric label="Aktive Mitspieler" value={analytics.players.length} />
         <Metric label="Häufigster Spieler" value={analytics.topPlayer?.name ?? "–"} />
         <Metric label="Beste Gewinnquote" value={formatPercent(analytics.bestWinRate?.winRate)} />
-        <Metric label="Ø Punkte pro Partie" value={formatNumber(analytics.averageScore)} />
+        <Metric label="Ø Platzierung" value={formatPlacement(analytics.averagePlacement)} />
       </div>
 
       <div className="panel-grid">
@@ -75,12 +75,15 @@ function PersonalStats({ analytics }) {
                 <div>
                   <strong>{player.name}</strong>
                   <span>
-                    {formatPercent(player.winRate)} Gewinnquote · Ø {formatNumber(player.averageScore)} Punkte
+                    {formatPercent(player.winRate)} Gewinnquote · Ø Platz {formatPlacement(player.averagePlacement)}
                   </span>
+                  <span>Beste Platzierung: {player.bestPlacementGame?.title ?? "–"}</span>
+                  <span>Häufigstes Spiel: {player.mostPlayedGame?.title ?? "–"}</span>
                 </div>
                 <span>{player.wins} Siege</span>
               </div>
             ))}
+            {!analytics.players.length && <p className="empty-hint">Noch keine Mitspieler erfasst.</p>}
           </div>
         </article>
       </div>
@@ -89,12 +92,55 @@ function PersonalStats({ analytics }) {
 }
 
 function GameStats({ analytics }) {
+  return (
+    <>
+      <div className="metric-grid">
+        <Metric label="Spiele in Sammlung" value={analytics.totalGames} />
+        <Metric label="Erfasste Spiel-Partien" value={analytics.totalPlays} />
+        <Metric label="Ø Spieldauer" value={formatMinutes(analytics.averageDuration)} />
+        <Metric label="Gesamtspielzeit" value={formatHours(analytics.totalDuration)} />
+      </div>
+
+      <article className="table-card">
+        <h2>Spielestatistiken</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Spiel</th>
+              <th>Partien</th>
+              <th>Meiste Siege</th>
+              <th>Beste Ø Platzierung</th>
+              <th>Häufigster Spieler</th>
+              <th>Ø Dauer</th>
+            </tr>
+          </thead>
+          <tbody>
+            {analytics.gameDetails.map((game) => (
+              <tr key={game.id}>
+                <td>
+                  <strong>{game.title}</strong>
+                </td>
+                <td>{game.plays}</td>
+                <td>{formatPlayerStat(game.mostWinsPlayer, "wins", "Siege")}</td>
+                <td>{formatPlacementPlayer(game.bestAveragePlacementPlayer)}</td>
+                <td>{formatPlayerStat(game.mostFrequentPlayer, "plays", "Partien")}</td>
+                <td>{formatMinutes(game.averagePlayedDuration)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </article>
+    </>
+  );
+}
+
+function GroupStats({ analytics }) {
   const maxPlays = Math.max(...analytics.games.map((game) => game.plays), 1);
 
   return (
     <>
       <div className="metric-grid">
-        <Metric label="Spiele in Sammlung" value={analytics.totalGames} />
+        <Metric label="Erfasste Partien" value={analytics.totalPlays} />
         <Metric label="Gespielte Spiele" value={analytics.playedGames} />
         <Metric label="Ungespielte Spiele" value={analytics.unplayedGames} />
         <Metric label="Meistgespielt" value={analytics.mostPlayedGame?.title ?? "–"} />
@@ -131,22 +177,7 @@ function GameStats({ analytics }) {
             {!analytics.unplayedGameList.length && <p className="empty-hint">Alle Spiele wurden bereits gespielt.</p>}
           </div>
         </article>
-      </div>
-    </>
-  );
-}
 
-function GroupStats({ analytics }) {
-  return (
-    <>
-      <div className="metric-grid">
-        <Metric label="Erfasste Partien" value={analytics.totalPlays} />
-        <Metric label="Ø Spieldauer" value={formatMinutes(analytics.averageDuration)} />
-        <Metric label="Ø Spielerzahl" value={formatNumber(analytics.averagePlayerCount)} />
-        <Metric label="Gesamtspielzeit" value={formatHours(analytics.totalDuration)} />
-      </div>
-
-      <div className="panel-grid">
         <article className="panel">
           <h2>Spielzeit nach Spieleranzahl</h2>
           <div className="list">
@@ -209,44 +240,83 @@ function ChartRow({ label, meta, percent }) {
 
 function buildAnalytics(games, plays, stats) {
   const playerMap = new Map();
-  let totalScore = 0;
-  let scoredResults = 0;
+  const gamePlayerMap = new Map();
+  let totalPlacement = 0;
+  let placementResults = 0;
 
   for (const play of plays) {
+    const placements = getPlayPlacements(play);
+
     for (const participant of play.participants ?? []) {
-      const player = playerMap.get(participant.name) ?? {
-        name: participant.name,
-        plays: 0,
-        wins: 0,
-        totalScore: 0,
-        scoredPlays: 0,
-      };
+      const placement = placements.get(participant.name) ?? null;
+      const gameTitle = play.game ?? "Unbekanntes Spiel";
+      const player = playerMap.get(participant.name) ?? createPlayerStats(participant.name);
+      const playerGame = player.games.get(gameTitle) ?? createPlayerGameStats(gameTitle);
 
       player.plays += 1;
-      if (play.winner === participant.name) player.wins += 1;
+      playerGame.plays += 1;
 
-      if (participant.score !== null && participant.score !== undefined && participant.score !== "") {
-        player.totalScore += Number(participant.score) || 0;
-        player.scoredPlays += 1;
-        totalScore += Number(participant.score) || 0;
-        scoredResults += 1;
+      if (play.winner === participant.name) {
+        player.wins += 1;
+        playerGame.wins += 1;
       }
 
+      if (placement !== null) {
+        player.totalPlacement += placement;
+        player.placementCount += 1;
+        playerGame.totalPlacement += placement;
+        playerGame.placementCount += 1;
+        totalPlacement += placement;
+        placementResults += 1;
+      }
+
+      player.games.set(gameTitle, playerGame);
       playerMap.set(participant.name, player);
+
+      const gameKey = play.gameId ?? gameTitle;
+      const gamePlayers = gamePlayerMap.get(gameKey) ?? new Map();
+      const gamePlayer = gamePlayers.get(participant.name) ?? createGamePlayerStats(participant.name);
+
+      gamePlayer.plays += 1;
+      if (play.winner === participant.name) gamePlayer.wins += 1;
+      if (placement !== null) {
+        gamePlayer.totalPlacement += placement;
+        gamePlayer.placementCount += 1;
+      }
+
+      gamePlayers.set(participant.name, gamePlayer);
+      gamePlayerMap.set(gameKey, gamePlayers);
     }
   }
 
   const players = [...playerMap.values()]
-    .map((player) => ({
-      ...player,
-      winRate: player.plays ? player.wins / player.plays : 0,
-      averageScore: player.scoredPlays ? player.totalScore / player.scoredPlays : null,
-    }))
+    .map(enrichPlayerStats)
     .toSorted((first, second) => second.plays - first.plays || second.wins - first.wins);
 
   const gamesWithCounts = stats.gamesWithPlayCounts.toSorted(
     (first, second) => second.plays - first.plays || first.title.localeCompare(second.title),
   );
+  const gameDetails = gamesWithCounts.map((game) => {
+    const gamePlayers = [...(gamePlayerMap.get(game.id) ?? gamePlayerMap.get(game.title) ?? new Map()).values()].map(
+      enrichGamePlayerStats,
+    );
+
+    return {
+      ...game,
+      mostWinsPlayer:
+        gamePlayers.toSorted((first, second) => second.wins - first.wins || second.plays - first.plays)[0] ?? null,
+      bestAveragePlacementPlayer:
+        gamePlayers
+          .filter((player) => player.placementCount > 0)
+          .toSorted(
+            (first, second) =>
+              first.averagePlacement - second.averagePlacement || second.plays - first.plays,
+          )[0] ?? null,
+      mostFrequentPlayer:
+        gamePlayers.toSorted((first, second) => second.plays - first.plays || second.wins - first.wins)[0] ??
+        null,
+    };
+  });
   const totalDuration = plays.reduce((sum, play) => sum + Number(play.duration || 0), 0);
   const totalPlayerCount = plays.reduce((sum, play) => sum + Number(play.players || 0), 0);
 
@@ -256,9 +326,10 @@ function buildAnalytics(games, plays, stats) {
     totalDuration,
     averageDuration: stats.averageDuration,
     averagePlayerCount: plays.length ? totalPlayerCount / plays.length : 0,
-    averageScore: scoredResults ? totalScore / scoredResults : null,
+    averagePlacement: placementResults ? totalPlacement / placementResults : null,
     durationByPlayerCount: stats.durationByPlayerCount,
     games: gamesWithCounts,
+    gameDetails,
     playedGames: gamesWithCounts.filter((game) => game.plays > 0).length,
     unplayedGames: gamesWithCounts.filter((game) => game.plays === 0).length,
     unplayedGameList: gamesWithCounts.filter((game) => game.plays === 0),
@@ -274,6 +345,97 @@ function buildAnalytics(games, plays, stats) {
   };
 }
 
+function createPlayerStats(name) {
+  return {
+    name,
+    plays: 0,
+    wins: 0,
+    totalPlacement: 0,
+    placementCount: 0,
+    games: new Map(),
+  };
+}
+
+function createPlayerGameStats(title) {
+  return {
+    title,
+    plays: 0,
+    wins: 0,
+    totalPlacement: 0,
+    placementCount: 0,
+  };
+}
+
+function createGamePlayerStats(name) {
+  return {
+    name,
+    plays: 0,
+    wins: 0,
+    totalPlacement: 0,
+    placementCount: 0,
+  };
+}
+
+function enrichPlayerStats(player) {
+  const games = [...player.games.values()].map((game) => ({
+    ...game,
+    averagePlacement: game.placementCount ? game.totalPlacement / game.placementCount : null,
+  }));
+
+  return {
+    ...player,
+    winRate: player.plays ? player.wins / player.plays : 0,
+    averagePlacement: player.placementCount ? player.totalPlacement / player.placementCount : null,
+    bestPlacementGame:
+      games
+        .filter((game) => game.averagePlacement !== null)
+        .toSorted((first, second) => first.averagePlacement - second.averagePlacement || second.plays - first.plays)[0] ??
+      null,
+    mostPlayedGame:
+      games.toSorted((first, second) => second.plays - first.plays || second.wins - first.wins)[0] ?? null,
+  };
+}
+
+function enrichGamePlayerStats(player) {
+  return {
+    ...player,
+    averagePlacement: player.placementCount ? player.totalPlacement / player.placementCount : null,
+  };
+}
+
+function getPlayPlacements(play) {
+  const participants = (play.participants ?? []).filter(
+    (participant) => participant.score !== null && participant.score !== undefined && participant.score !== "",
+  );
+
+  if (!participants.length || play.scoringMode === "none") {
+    return new Map();
+  }
+
+  const sortedParticipants = participants.toSorted((first, second) => {
+    if (play.scoringMode === "low" || play.scoringMode === "placement") {
+      return Number(first.score) - Number(second.score);
+    }
+
+    return Number(second.score) - Number(first.score);
+  });
+  const placements = new Map();
+  let currentPlacement = 1;
+
+  for (let index = 0; index < sortedParticipants.length; index += 1) {
+    const participant = sortedParticipants[index];
+    const previousParticipant = sortedParticipants[index - 1];
+
+    if (previousParticipant && Number(previousParticipant.score) !== Number(participant.score)) {
+      currentPlacement = index + 1;
+    }
+
+    placements.set(participant.name, currentPlacement);
+  }
+
+  return placements;
+}
+
 function formatMinutes(value) {
   return value ? `${Math.round(value)} Min.` : "–";
 }
@@ -287,6 +449,14 @@ function formatPercent(value) {
   return value === null || value === undefined ? "–" : `${Math.round(value * 100)} %`;
 }
 
-function formatNumber(value) {
+function formatPlacement(value) {
   return value === null || value === undefined ? "–" : Math.round(value * 10) / 10;
+}
+
+function formatPlayerStat(player, key, label) {
+  return player ? `${player.name} (${player[key]} ${label})` : "–";
+}
+
+function formatPlacementPlayer(player) {
+  return player ? `${player.name} (Ø Platz ${formatPlacement(player.averagePlacement)})` : "–";
 }
