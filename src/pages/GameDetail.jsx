@@ -20,6 +20,7 @@ export default function GameDetail() {
   const statistics = buildGameStatistics(game, plays);
   const tabs = [
     { id: "overview", label: "Übersicht" },
+    { id: "info", label: "Spielinfo" },
     { id: "players", label: "Spieler" },
     { id: "plays", label: "Partien" },
   ];
@@ -50,6 +51,7 @@ export default function GameDetail() {
       </div>
 
       {activeTab === "overview" && <OverviewTab game={game} statistics={statistics} />}
+      {activeTab === "info" && <InfoTab game={game} />}
       {activeTab === "players" && <PlayersTab statistics={statistics} />}
       {activeTab === "plays" && <PlaysTab statistics={statistics} />}
     </section>
@@ -67,16 +69,6 @@ function OverviewTab({ game, statistics }) {
       </div>
 
       <div className="panel-grid">
-        <article className="panel">
-          <h2>Allgemeine Spielinformationen</h2>
-          <div className="list">
-            <InfoRow label="Kategorie" value={game.category} />
-            <InfoRow label="Spielerzahl" value={`${game.minPlayers}–${game.maxPlayers}`} />
-            <InfoRow label="Vorgegebene Spielzeit" value={formatMinutes(game.duration)} />
-            <InfoRow label="Erweiterungen" value={(game.expansions ?? []).map((entry) => entry.name).join(", ") || "–"} />
-          </div>
-        </article>
-
         <article className="panel highlight-panel">
           <p className="eyebrow">Kurzfazit</p>
           <h2>
@@ -90,6 +82,20 @@ function OverviewTab({ game, statistics }) {
         </article>
       </div>
     </>
+  );
+}
+
+function InfoTab({ game }) {
+  return (
+    <article className="panel">
+      <h2>Allgemeine Spielinformationen</h2>
+      <div className="list">
+        <InfoRow label="Kategorie" value={game.category} />
+        <InfoRow label="Spielerzahl" value={`${game.minPlayers}–${game.maxPlayers}`} />
+        <InfoRow label="Vorgegebene Spielzeit" value={formatMinutes(game.duration)} />
+        <InfoRow label="Erweiterungen" value={(game.expansions ?? []).map((entry) => entry.name).join(", ") || "–"} />
+      </div>
+    </article>
   );
 }
 
