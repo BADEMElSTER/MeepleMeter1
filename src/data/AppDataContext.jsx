@@ -4,6 +4,14 @@ import { games as initialGames, plays as initialPlays } from "./mockData.js";
 const AppDataContext = createContext(null);
 const STORAGE_KEY = "meeplemeter-data-v1";
 
+function createId() {
+  if (globalThis.crypto?.randomUUID) {
+    return globalThis.crypto.randomUUID();
+  }
+
+  return `id-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 function loadStoredData() {
   try {
     const storedData = localStorage.getItem(STORAGE_KEY);
@@ -31,7 +39,7 @@ function calculateWinner(participants, scoringMode, fallbackWinner = "") {
     return "Nicht erfasst";
   }
 
-  const sortedParticipants = participants.toSorted((first, second) =>
+  const sortedParticipants = [...participants].sort((first, second) =>
     scoringMode === "low" ? first.score - second.score : second.score - first.score,
   );
 
@@ -61,6 +69,9 @@ function normalizeGame(game) {
 
 function buildGame(gameInput, existingGame = {}) {
   const minPlayers = Number(gameInput.minPlayers) || 1;
+  const catalogYear = Object.hasOwn(gameInput, "catalogYear")
+    ? Number(gameInput.catalogYear) || null
+    : existingGame.catalogYear ?? null;
 
   return normalizeGame({
     ...existingGame,
@@ -71,7 +82,7 @@ function buildGame(gameInput, existingGame = {}) {
     duration: Number(gameInput.duration) || 0,
     bggId: gameInput.bggId ?? existingGame.bggId ?? null,
     catalogId: gameInput.catalogId ?? existingGame.catalogId ?? null,
-    catalogYear: gameInput.catalogYear ?? existingGame.catalogYear ?? null,
+    catalogYear,
     catalogRank: gameInput.catalogRank ?? existingGame.catalogRank ?? null,
     catalogRating: gameInput.catalogRating ?? existingGame.catalogRating ?? null,
     catalogImage: gameInput.catalogImage ?? existingGame.catalogImage ?? null,
@@ -166,7 +177,7 @@ export function AppDataProvider({ children }) {
         playCount: group.playCount,
         averageDuration: Math.round(group.totalDuration / group.playCount),
       }))
-      .toSorted((a, b) => a.playerCount - b.playerCount);
+      .sort((a, b) => a.playerCount - b.playerCount);
     const gamesWithPlayCounts = games.map((game) => {
       const matchingPlays = plays.filter(
         (play) => play.gameId === game.id || play.game === game.title,
@@ -196,7 +207,7 @@ export function AppDataProvider({ children }) {
       averageDuration: plays.length ? Math.round(totalDuration / plays.length) : 0,
       durationByPlayerCount,
       mostPlayedGame:
-        gamesWithPlayCounts.toSorted((a, b) => Number(b.plays) - Number(a.plays))[0] ??
+        [...gamesWithPlayCounts].sort((a, b) => Number(b.plays) - Number(a.plays))[0] ??
         fallbackGame,
       gamesWithPlayCounts,
     };
@@ -217,7 +228,7 @@ export function AppDataProvider({ children }) {
       }
 
       wasAdded = true;
-      return [{ id: crypto.randomUUID(), ...buildGame(gameInput) }, ...currentGames];
+      return [{ id: createId(), ...buildGame(gameInput) }, ...currentGames];
     });
 
     return wasAdded;
@@ -242,7 +253,7 @@ export function AppDataProvider({ children }) {
 
   function addPlay(playInput) {
     const play = {
-      id: crypto.randomUUID(),
+      id: createId(),
       ...buildPlay(playInput, games),
     };
 
@@ -313,3 +324,4 @@ export function useAppData() {
 
   return context;
 }
+

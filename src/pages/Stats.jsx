@@ -325,9 +325,9 @@ function buildAnalytics(games, plays, stats) {
 
   const players = [...playerMap.values()]
     .map(enrichPlayerStats)
-    .toSorted((first, second) => second.plays - first.plays || second.wins - first.wins);
+    .sort((first, second) => second.plays - first.plays || second.wins - first.wins);
 
-  const gamesWithCounts = stats.gamesWithPlayCounts.toSorted(
+  const gamesWithCounts = [...stats.gamesWithPlayCounts].sort(
     (first, second) => second.plays - first.plays || first.title.localeCompare(second.title),
   );
   const gameDetails = gamesWithCounts.map((game) => {
@@ -338,16 +338,16 @@ function buildAnalytics(games, plays, stats) {
     return {
       ...game,
       mostWinsPlayer:
-        gamePlayers.toSorted((first, second) => second.wins - first.wins || second.plays - first.plays)[0] ?? null,
+        [...gamePlayers].sort((first, second) => second.wins - first.wins || second.plays - first.plays)[0] ?? null,
       bestAveragePlacementPlayer:
-        gamePlayers
+        [...gamePlayers
           .filter((player) => player.placementCount > 0)
-          .toSorted(
+        ].sort(
             (first, second) =>
               first.averagePlacement - second.averagePlacement || second.plays - first.plays,
           )[0] ?? null,
       mostFrequentPlayer:
-        gamePlayers.toSorted((first, second) => second.plays - first.plays || second.wins - first.wins)[0] ??
+        [...gamePlayers].sort((first, second) => second.plays - first.plays || second.wins - first.wins)[0] ??
         null,
     };
   });
@@ -370,9 +370,9 @@ function buildAnalytics(games, plays, stats) {
     players,
     topPlayer: players[0] ?? null,
     bestWinRate:
-      players
+      [...players
         .filter((player) => player.plays >= 2)
-        .toSorted((first, second) => second.winRate - first.winRate || second.wins - first.wins)[0] ??
+      ].sort((first, second) => second.winRate - first.winRate || second.wins - first.wins)[0] ??
       null,
     mostPlayedGame: stats.mostPlayedGame,
     latestWinners: plays.filter((play) => play.winner && play.winner !== "Nicht erfasst").slice(0, 8),
@@ -421,12 +421,12 @@ function enrichPlayerStats(player) {
     winRate: player.plays ? player.wins / player.plays : 0,
     averagePlacement: player.placementCount ? player.totalPlacement / player.placementCount : null,
     bestPlacementGame:
-      games
+      [...games
         .filter((game) => game.averagePlacement !== null)
-        .toSorted((first, second) => first.averagePlacement - second.averagePlacement || second.plays - first.plays)[0] ??
+      ].sort((first, second) => first.averagePlacement - second.averagePlacement || second.plays - first.plays)[0] ??
       null,
     mostPlayedGame:
-      games.toSorted((first, second) => second.plays - first.plays || second.wins - first.wins)[0] ?? null,
+      [...games].sort((first, second) => second.plays - first.plays || second.wins - first.wins)[0] ?? null,
   };
 }
 
@@ -446,7 +446,7 @@ function getPlayPlacements(play) {
     return new Map();
   }
 
-  const sortedParticipants = participants.toSorted((first, second) => {
+  const sortedParticipants = [...participants].sort((first, second) => {
     if (play.scoringMode === "low" || play.scoringMode === "placement") {
       return Number(first.score) - Number(second.score);
     }
@@ -506,3 +506,4 @@ function formatPlacementPlayer(player) {
     "–"
   );
 }
+

@@ -2,15 +2,18 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import App from "./App.jsx";
+import { AuthProvider } from "./auth/AuthContext.jsx";
 import { AppDataProvider } from "./data/AppDataContext.jsx";
 import "./styles.css";
 
 createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <BrowserRouter>
-      <AppDataProvider>
-        <App />
-      </AppDataProvider>
+      <AuthProvider>
+        <AppDataProvider>
+          <App />
+        </AppDataProvider>
+      </AuthProvider>
     </BrowserRouter>
   </React.StrictMode>,
 );

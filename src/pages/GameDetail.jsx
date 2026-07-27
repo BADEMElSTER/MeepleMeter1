@@ -65,8 +65,39 @@ function OverviewTab({ game, statistics }) {
       <div className="metric-grid">
         <Metric label="Gespielte Partien" value={statistics.playCount} />
         <Metric label="Ø Spieldauer" value={formatMinutes(statistics.averageDuration)} />
-        <Metric label="Häufigster Sieger" value={<PlayerLink name={statistics.mostWinsPlayer?.name}>{formatPlayer(statistics.mostWinsPlayer)}</PlayerLink>} />
-        <Metric label="Häufigster Verlierer" value={<PlayerLink name={statistics.mostLossesPlayer?.name}>{formatPlayer(statistics.mostLossesPlayer)}</PlayerLink>} />
+        <Metric
+          label="Häufigster Sieger"
+          value={formatPlayerWithCount(statistics.mostWinsPlayer, "wins", "Sieg", "Siege")}
+        />
+        <Metric
+          label="Häufigster Verlierer"
+          value={formatPlayerWithCount(
+            statistics.mostLossesPlayer,
+            "losses",
+            "Niederlage",
+            "Niederlagen",
+          )}
+        />
+        <Metric
+          label="Durchschnittliche Punkte zum Sieg"
+          value={formatAverageWinningScore(statistics.scoreRecords)}
+        />
+        <Metric
+          label="Sieg mit meisten Punkten"
+          value={formatScoreRecord(statistics.scoreRecords.highestWinningScore)}
+        />
+        <Metric
+          label="Sieg mit wenigsten Punkten"
+          value={formatScoreRecord(statistics.scoreRecords.lowestWinningScore)}
+        />
+        <Metric
+          label="Verlierer mit meisten Punkten"
+          value={formatScoreRecord(statistics.scoreRecords.highestLosingScore)}
+        />
+        <Metric
+          label="Verlierer mit wenigsten Punkten"
+          value={formatScoreRecord(statistics.scoreRecords.lowestLosingScore)}
+        />
       </div>
 
       <div className="panel-grid">
@@ -183,13 +214,15 @@ function buildGameStatistics(game, plays) {
         play.gameId === game.id ||
         normalizeTitle(play.game) === normalizeTitle(game.title),
     )
-    .toSorted((first, second) => new Date(second.date) - new Date(first.date));
+    .sort((first, second) => new Date(second.date) - new Date(first.date));
   const playerMap = new Map();
+  const scoreRecords = buildInitialScoreRecords();
   const totalDuration = matchingPlays.reduce((sum, play) => sum + Number(play.duration || 0), 0);
 
   for (const play of matchingPlays) {
     const placements = getPlayPlacements(play);
     const lossNames = getLossNames(play, placements);
+    updateScoreRecords(scoreRecords, play);
 
     for (const participant of play.participants ?? []) {
       const player = playerMap.get(participant.name) ?? {
@@ -219,13 +252,14 @@ function buildGameStatistics(game, plays) {
       ...player,
       averagePlacement: player.placementCount ? player.totalPlacement / player.placementCount : null,
     }))
-    .toSorted((first, second) => second.plays - first.plays || second.wins - first.wins);
+    .sort((first, second) => second.plays - first.plays || second.wins - first.wins);
 
   return {
     playCount: matchingPlays.length,
     averageDuration: matchingPlays.length ? totalDuration / matchingPlays.length : null,
-    mostWinsPlayer: players.toSorted((first, second) => second.wins - first.wins || second.plays - first.plays)[0],
-    mostLossesPlayer: players.toSorted((first, second) => second.losses - first.losses || second.plays - first.plays)[0],
+    mostWinsPlayer: [...players].sort((first, second) => second.wins - first.wins || second.plays - first.plays)[0],
+    mostLossesPlayer: [...players].sort((first, second) => second.losses - first.losses || second.plays - first.plays)[0],
+    scoreRecords,
     players,
     plays: matchingPlays,
   };
@@ -240,7 +274,7 @@ function getPlayPlacements(play) {
     return new Map();
   }
 
-  const sortedParticipants = participants.toSorted((first, second) => {
+  const sortedParticipants = [...participants].sort((first, second) => {
     if (play.scoringMode === "low" || play.scoringMode === "placement") {
       return Number(first.score) - Number(second.score);
     }
@@ -262,6 +296,69 @@ function getPlayPlacements(play) {
   }
 
   return placements;
+}
+
+function buildInitialScoreRecords() {
+  return {
+    highestWinningScore: null,
+    lowestWinningScore: null,
+    highestLosingScore: null,
+    lowestLosingScore: null,
+    winningScoreTotal: 0,
+    winningScoreCount: 0,
+  };
+}
+
+function updateScoreRecords(records, play) {
+  if (play.scoringMode === "none" || play.scoringMode === "placement") {
+    return;
+  }
+
+  const scoredParticipants = (play.participants ?? [])
+    .map((participant) => ({
+      ...participant,
+      score: Number(participant.score),
+    }))
+    .filter((participant) => Number.isFinite(participant.score));
+
+  if (!scoredParticipants.length) {
+    return;
+  }
+
+  const worstScore =
+    play.scoringMode === "low"
+      ? Math.max(...scoredParticipants.map((participant) => participant.score))
+      : Math.min(...scoredParticipants.map((participant) => participant.score));
+
+  for (const participant of scoredParticipants) {
+    const record = {
+      name: participant.name,
+      score: participant.score,
+      date: play.date,
+      playId: play.id,
+    };
+
+    if (participant.name === play.winner) {
+      records.highestWinningScore = getHigherScoreRecord(records.highestWinningScore, record);
+      records.lowestWinningScore = getLowerScoreRecord(records.lowestWinningScore, record);
+      records.winningScoreTotal += participant.score;
+      records.winningScoreCount += 1;
+      continue;
+    }
+
+    if (participant.score === worstScore) {
+      records.highestLosingScore = getHigherScoreRecord(records.highestLosingScore, record);
+      records.lowestLosingScore = getLowerScoreRecord(records.lowestLosingScore, record);
+    }
+  }
+}
+
+function getHigherScoreRecord(currentRecord, nextRecord) {
+  return !currentRecord || nextRecord.score > currentRecord.score ? nextRecord : currentRecord;
+}
+
+function getLowerScoreRecord(currentRecord, nextRecord) {
+  return !currentRecord || nextRecord.score < currentRecord.score ? nextRecord : currentRecord;
 }
 
 function getLossNames(play, placements) {
@@ -287,6 +384,49 @@ function formatPlacement(value) {
 
 function formatPlayer(player) {
   return player?.name ?? "–";
+}
+
+function formatPlayerWithCount(player, countKey, singularLabel, pluralLabel) {
+  if (!player?.name) {
+    return "–";
+  }
+
+  const count = Number(player[countKey] ?? 0);
+  const countLabel = count === 1 ? singularLabel : pluralLabel;
+
+  return (
+    <>
+      <PlayerLink name={player.name}>{player.name}</PlayerLink>
+      <small className="metric-detail">
+        {count} {countLabel}
+      </small>
+    </>
+  );
+}
+
+function formatAverageWinningScore(scoreRecords) {
+  if (!scoreRecords?.winningScoreCount) {
+    return "?";
+  }
+
+  const averageScore = Math.round((scoreRecords.winningScoreTotal / scoreRecords.winningScoreCount) * 10) / 10;
+
+  return `${averageScore} Punkte`;
+}
+
+function formatScoreRecord(record) {
+  if (!record?.name) {
+    return "?";
+  }
+
+  return (
+    <>
+      <PlayerLink name={record.name}>{record.name}</PlayerLink>
+      <small className="metric-detail">
+        {record.score} Punkte
+      </small>
+    </>
+  );
 }
 
 function buildVirtualGame(title, plays) {
@@ -316,3 +456,4 @@ function buildVirtualGame(title, plays) {
 function normalizeTitle(title = "") {
   return String(title).trim().toLowerCase();
 }
+

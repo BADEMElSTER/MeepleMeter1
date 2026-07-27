@@ -419,6 +419,7 @@ function getKnownPlayerNames(plays, currentParticipants) {
   }
 
   return [...frequencies.entries()]
-    .toSorted((first, second) => second[1] - first[1] || first[0].localeCompare(second[0]))
+    .sort((first, second) => second[1] - first[1] || first[0].localeCompare(second[0]))
     .map(([name]) => name);
 }
+

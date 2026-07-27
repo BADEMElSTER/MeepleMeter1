@@ -4,23 +4,19 @@ export default function Home() {
   return (
     <>
       <header className="site-header">
-        <Link className="brand" to="/">
-          <span className="brand-mark">M</span>
-          <span>MeepleMeter</span>
-        </Link>
-        <nav className="main-nav" aria-label="Hauptnavigation">
-          <a href="#funktionen">Funktionen</a>
-          <a href="#ablauf">Ablauf</a>
-          <a href="#mvp">MVP</a>
-        </nav>
-        <div className="header-actions">
+        <div className="site-header-top">
+          <Link className="brand" to="/">
+            <span className="brand-mark">M</span>
+            <span>MeepleMeter</span>
+          </Link>
           <Link className="login-link" to="/login">
             Einloggen
           </Link>
-          <Link className="button button-small" to="/register">
-            Kostenlos starten
-          </Link>
         </div>
+        <nav className="main-nav" aria-label="Hauptnavigation">
+          <a href="#funktionen">Features</a>
+          <a href="#ablauf">So funktioniert’s</a>
+        </nav>
       </header>
 
       <main>
@@ -42,45 +38,12 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="hero-card">
-            <div className="card-header">
-              <span className="status-dot"></span>
-              <span>Rundenübersicht</span>
-            </div>
-            <div className="game-preview">
-              <div>
-                <p className="label">Meistgespielt</p>
-                <strong>Cascadia</strong>
-              </div>
-              <div>
-                <p className="label">Ø Spielzeit</p>
-                <strong>65 Min.</strong>
-              </div>
-            </div>
-            <div className="meter">
-              <span style={{ width: "88%" }}></span>
-            </div>
-            <ul className="stats-list">
-              <li>
-                <span>Spiele</span>
-                <strong>24</strong>
-              </li>
-              <li>
-                <span>Partien</span>
-                <strong>118</strong>
-              </li>
-              <li>
-                <span>Mitspieler</span>
-                <strong>9</strong>
-              </li>
-            </ul>
-          </div>
         </section>
 
         <section id="funktionen" className="section">
           <div className="section-heading">
-            <p className="eyebrow">Kernnutzen</p>
-            <h2>Fokus auf das, was private Runden brauchen.</h2>
+            <p className="eyebrow">Features</p>
+            <h2>Fokus auf das, was Brettspielrunden brauchen.</h2>
           </div>
           <div className="feature-grid">
             <article className="feature-card">
@@ -100,7 +63,7 @@ export default function Home() {
 
         <section id="ablauf" className="section split-section">
           <div>
-            <p className="eyebrow">Ablauf</p>
+            <p className="eyebrow">So funktioniert’s</p>
             <h2>Schnell erfassen, später auswerten.</h2>
           </div>
           <ol className="steps">
@@ -119,13 +82,6 @@ export default function Home() {
           </ol>
         </section>
 
-        <section id="mvp" className="cta-section">
-          <h2>Demo mit Mock-Daten ansehen.</h2>
-          <p>Die App-Struktur steht ohne Backend. Auth und Datenbank folgen später.</p>
-          <Link className="button" to="/dashboard">
-            Zum Dashboard
-          </Link>
-        </section>
       </main>
     </>
   );

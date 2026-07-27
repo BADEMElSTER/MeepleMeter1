@@ -238,7 +238,7 @@ function buildPlayerStatistics(name, games, plays, profile) {
 
   const matchingPlays = plays
     .filter((play) => (play.participants ?? []).some((participant) => sameName(participant.name, playerName)))
-    .toSorted((first, second) => new Date(second.date) - new Date(first.date));
+    .sort((first, second) => new Date(second.date) - new Date(first.date));
 
   if (!matchingPlays.length) {
     return null;
@@ -283,7 +283,7 @@ function buildPlayerStatistics(name, games, plays, profile) {
       ...game,
       averagePlacement: game.placementCount ? game.totalPlacement / game.placementCount : null,
     }))
-    .toSorted((first, second) => second.plays - first.plays || second.wins - first.wins);
+    .sort((first, second) => second.plays - first.plays || second.wins - first.wins);
 
   return {
     name: playerName,
@@ -297,7 +297,7 @@ function buildPlayerStatistics(name, games, plays, profile) {
     averagePlacement: placementCount ? totalPlacement / placementCount : null,
     mostPlayedGame: playerGames[0] ?? null,
     bestWinningGame:
-      playerGames.toSorted((first, second) => second.wins - first.wins || second.plays - first.plays)[0] ?? null,
+      [...playerGames].sort((first, second) => second.wins - first.wins || second.plays - first.plays)[0] ?? null,
     games: playerGames,
     latestPlays: matchingPlays,
   };
@@ -312,7 +312,7 @@ function getPlayPlacements(play) {
     return new Map();
   }
 
-  const sortedParticipants = participants.toSorted((first, second) => {
+  const sortedParticipants = [...participants].sort((first, second) => {
     if (play.scoringMode === "low" || play.scoringMode === "placement") {
       return Number(first.score) - Number(second.score);
     }
@@ -347,3 +347,4 @@ function formatMinutes(value) {
 function formatPlacement(value) {
   return value === null || value === undefined ? "–" : Math.round(value * 10) / 10;
 }
+
