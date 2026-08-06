@@ -2,9 +2,17 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useAppData } from "../data/AppDataContext.jsx";
 
+const initialResetSelection = {
+  resetGames: false,
+  resetPlays: false,
+  resetPlayers: false,
+};
+
 export default function Admin() {
-  const { games, plays, addGame } = useAppData();
+  const { games, plays, addGame, resetLocalData } = useAppData();
   const [importMessage, setImportMessage] = useState("");
+  const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
+  const [resetSelection, setResetSelection] = useState(initialResetSelection);
 
   async function handleGameImport(event) {
     const file = event.target.files?.[0];
@@ -42,6 +50,30 @@ export default function Admin() {
     link.click();
     URL.revokeObjectURL(url);
   }
+
+  function openResetDialog() {
+    setResetSelection(initialResetSelection);
+    setIsResetDialogOpen(true);
+  }
+
+  function closeResetDialog() {
+    setIsResetDialogOpen(false);
+    setResetSelection(initialResetSelection);
+  }
+
+  function updateResetSelection(field) {
+    setResetSelection((currentSelection) => ({
+      ...currentSelection,
+      [field]: !currentSelection[field],
+    }));
+  }
+
+  function confirmReset() {
+    resetLocalData(resetSelection);
+    closeResetDialog();
+  }
+
+  const hasResetSelection = Object.values(resetSelection).some(Boolean);
 
   return (
     <section className="page">
@@ -86,6 +118,15 @@ export default function Admin() {
 
       <div className="panel-grid admin-grid">
         <article className="panel admin-link-card">
+          <p className="eyebrow">Mitspieler</p>
+          <h2>Spielerliste verwalten</h2>
+          <p>Mitspieler suchen, Account-Status pflegen und spätere Benutzerkonten vorbereiten.</p>
+          <Link className="button button-secondary" to="/admin/players">
+            Mitspieler verwalten
+          </Link>
+        </article>
+
+        <article className="panel admin-link-card">
           <p className="eyebrow">Spiele</p>
           <h2>Spiele verwalten</h2>
           <p>Spiele suchen, nach Kategorie filtern und ausgewählte Spiele löschen.</p>
@@ -103,6 +144,78 @@ export default function Admin() {
           </Link>
         </article>
       </div>
+
+      <article className="panel admin-danger-panel">
+        <p className="eyebrow">Testphase</p>
+        <h2>Testdaten zurücksetzen</h2>
+        <p>
+          Setzt nur die lokal gespeicherten MeepleMeter-Daten zurück. Firebase-Auth-Konten werden dadurch nicht gelöscht.
+        </p>
+        <button className="button button-danger" type="button" onClick={openResetDialog}>
+          Alles zurücksetzen
+        </button>
+      </article>
+
+      {isResetDialogOpen && (
+        <div className="dialog-backdrop" role="presentation">
+          <div className="dialog-card" role="dialog" aria-modal="true" aria-labelledby="reset-dialog-title">
+            <div className="dialog-header">
+              <div>
+                <p className="eyebrow">Zurücksetzen</p>
+                <h2 id="reset-dialog-title">Was soll gelöscht werden?</h2>
+              </div>
+              <button className="ghost-button" type="button" onClick={closeResetDialog}>
+                Schließen
+              </button>
+            </div>
+
+            <p className="dialog-warning">
+              Diese Aktion löscht die ausgewählten lokalen Testdaten dauerhaft aus dem Browser-Speicher.
+            </p>
+
+            <div className="reset-options">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={resetSelection.resetGames}
+                  onChange={() => updateResetSelection("resetGames")}
+                />
+                Sammlung zurücksetzen
+              </label>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={resetSelection.resetPlays}
+                  onChange={() => updateResetSelection("resetPlays")}
+                />
+                Partien zurücksetzen
+              </label>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={resetSelection.resetPlayers}
+                  onChange={() => updateResetSelection("resetPlayers")}
+                />
+                Benutzer zurücksetzen
+              </label>
+            </div>
+
+            <div className="dialog-actions">
+              <button className="button button-secondary" type="button" onClick={closeResetDialog}>
+                Abbrechen
+              </button>
+              <button
+                className="button button-danger"
+                type="button"
+                disabled={!hasResetSelection}
+                onClick={confirmReset}
+              >
+                Auswahl zurücksetzen
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

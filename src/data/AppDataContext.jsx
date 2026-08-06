@@ -27,6 +27,7 @@ function normalizeParticipants(participants = [], scoringMode = "none") {
     .map((participant) => ({
       name: participant.name.trim(),
       score: scoringMode === "none" ? null : Number(participant.score) || 0,
+      scoreDetails: participant.scoreDetails ?? {},
     }));
 }
 
@@ -64,6 +65,9 @@ function normalizeGame(game) {
     catalogImage: game.catalogImage ?? null,
     catalogExpansions: game.catalogExpansions ?? [],
     expansions: game.expansions ?? game.catalogExpansions ?? [],
+    scoreCategories: normalizeScoreCategories(game.scoreCategories),
+    owner: game.owner?.trim() ?? "",
+    ownerNormalized: game.ownerNormalized ?? game.owner?.trim().toLowerCase() ?? "",
   };
 }
 
@@ -88,7 +92,29 @@ function buildGame(gameInput, existingGame = {}) {
     catalogImage: gameInput.catalogImage ?? existingGame.catalogImage ?? null,
     catalogExpansions: gameInput.catalogExpansions ?? existingGame.catalogExpansions ?? [],
     expansions: parseExpansions(gameInput.expansions ?? existingGame.expansions ?? []),
+    scoreCategories: normalizeScoreCategories(gameInput.scoreCategories ?? existingGame.scoreCategories),
+    owner: gameInput.owner?.trim() || existingGame.owner || "",
+    ownerNormalized:
+      gameInput.owner?.trim().toLowerCase() ||
+      existingGame.ownerNormalized ||
+      existingGame.owner?.trim().toLowerCase() ||
+      "",
   });
+}
+
+function normalizeScoreCategories(categories = []) {
+  if (!Array.isArray(categories)) {
+    return [];
+  }
+
+  return categories
+    .map((category) => ({
+      id: category.id || createId(),
+      name: category.name?.trim() ?? "",
+      type: category.type === "minus" ? "minus" : "plus",
+      multiplier: Number(category.multiplier) || 1,
+    }))
+    .filter((category) => category.name);
 }
 
 function normalizeTitle(title) {
@@ -134,6 +160,10 @@ function normalizePlayerProfile(profile) {
     name: profile.name?.trim() ?? "",
     favoriteGame: profile.favoriteGame?.trim() ?? "",
     favoriteColor: profile.favoriteColor?.trim() ?? "",
+    accountEmail: profile.accountEmail?.trim() ?? "",
+    accountUsername: profile.accountUsername?.trim() ?? "",
+    accountStatus: profile.accountStatus ?? "guest",
+    isDeleted: Boolean(profile.isDeleted),
     notes: profile.notes?.trim() ?? "",
   };
 }
@@ -251,6 +281,16 @@ export function AppDataProvider({ children }) {
     setPlays((currentPlays) => currentPlays.filter((play) => play.gameId !== gameId));
   }
 
+  function updateGameScoreCategories(gameId, scoreCategories) {
+    setGames((currentGames) =>
+      currentGames.map((game) =>
+        game.id === gameId
+          ? { ...game, scoreCategories: normalizeScoreCategories(scoreCategories) }
+          : game,
+      ),
+    );
+  }
+
   function addPlay(playInput) {
     const play = {
       id: createId(),
@@ -295,6 +335,85 @@ export function AppDataProvider({ children }) {
     });
   }
 
+  function deletePlayer(playerName) {
+    const normalizedPlayerName = playerName.trim().toLowerCase();
+
+    if (!normalizedPlayerName) {
+      return;
+    }
+
+    setPlayerProfiles((currentProfiles) => {
+      const existingProfile = currentProfiles.find(
+        (profile) => profile.name.toLowerCase() === normalizedPlayerName,
+      );
+
+      if (existingProfile) {
+        return currentProfiles.map((profile) =>
+          profile.name.toLowerCase() === normalizedPlayerName
+            ? { ...profile, isDeleted: true, accountStatus: "deleted" }
+            : profile,
+        );
+      }
+
+      return [
+        {
+          name: playerName.trim(),
+          favoriteGame: "",
+          favoriteColor: "",
+          accountEmail: "",
+          accountUsername: "",
+          accountStatus: "deleted",
+          isDeleted: true,
+          notes: "",
+        },
+        ...currentProfiles,
+      ];
+    });
+  }
+
+  function renamePlayer(oldName, newName) {
+    const normalizedOldName = oldName.trim().toLowerCase();
+    const trimmedNewName = newName.trim();
+
+    if (!normalizedOldName || !trimmedNewName || normalizedOldName === trimmedNewName.toLowerCase()) {
+      return;
+    }
+
+    setPlays((currentPlays) =>
+      currentPlays.map((play) => ({
+        ...play,
+        winner: play.winner?.trim().toLowerCase() === normalizedOldName ? trimmedNewName : play.winner,
+        participants: (play.participants ?? []).map((participant) =>
+          participant.name?.trim().toLowerCase() === normalizedOldName
+            ? { ...participant, name: trimmedNewName }
+            : participant,
+        ),
+      })),
+    );
+
+    setPlayerProfiles((currentProfiles) =>
+      currentProfiles.map((profile) =>
+        profile.name?.trim().toLowerCase() === normalizedOldName
+          ? { ...profile, name: trimmedNewName, accountUsername: trimmedNewName }
+          : profile,
+      ),
+    );
+  }
+
+  function resetLocalData(options) {
+    if (options.resetGames) {
+      setGames([]);
+    }
+
+    if (options.resetPlays) {
+      setPlays([]);
+    }
+
+    if (options.resetPlayers) {
+      setPlayerProfiles([]);
+    }
+  }
+
   const value = useMemo(
     () => ({
       games,
@@ -303,11 +422,15 @@ export function AppDataProvider({ children }) {
       stats,
       addGame,
       updateGame,
+      updateGameScoreCategories,
       deleteGame,
       addPlay,
       updatePlay,
       deletePlay,
       updatePlayerProfile,
+      deletePlayer,
+      renamePlayer,
+      resetLocalData,
     }),
     [games, plays, playerProfiles, stats],
   );

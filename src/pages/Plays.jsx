@@ -2,9 +2,8 @@ import { useState } from "react";
 import Field from "../components/Field.jsx";
 import GameLink from "../components/GameLink.jsx";
 import PlayerLink from "../components/PlayerLink.jsx";
+import { useAuth } from "../auth/AuthContext.jsx";
 import { useAppData } from "../data/AppDataContext.jsx";
-
-const defaultPlayerNames = ["Basti", "Nina", "Tom", "Lea"];
 
 function getToday() {
   return new Date().toISOString().slice(0, 10);
@@ -23,14 +22,21 @@ function getScoringLabel(scoringMode) {
 }
 
 export default function Plays() {
-  const { games, plays, addPlay, updatePlay, deletePlay } = useAppData();
+  const { userProfile } = useAuth();
+  const { games, plays, playerProfiles, addPlay, updatePlay, deletePlay } = useAppData();
+  const username = userProfile?.username || userProfile?.displayName || "";
+  const normalizedUsername = username.trim().toLowerCase();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingPlayId, setEditingPlayId] = useState(null);
   const [newPlayerName, setNewPlayerName] = useState("");
   const [playerSearch, setPlayerSearch] = useState("");
-  const knownPlayerNames = getKnownPlayerNames(plays, []);
+  const [formError, setFormError] = useState("");
+  const deletedPlayerNames = playerProfiles
+    .filter((profile) => profile.isDeleted)
+    .map((profile) => profile.name.trim().toLowerCase());
+  const knownPlayerNames = getKnownPlayerNames(plays, [], username, deletedPlayerNames);
   const [form, setForm] = useState(getInitialForm(knownPlayerNames, games));
-  const sortedPlayerNames = getKnownPlayerNames(plays, form.participants);
+  const sortedPlayerNames = getKnownPlayerNames(plays, form.participants, username, deletedPlayerNames);
   const selectablePlayerNames = [
     ...new Set([...sortedPlayerNames, ...form.participants.map((participant) => participant.name)]),
   ];
@@ -38,6 +44,9 @@ export default function Plays() {
   const dropdownPlayerNames = selectablePlayerNames
     .filter((name) => !detailedPlayerNames.includes(name))
     .filter((name) => name.toLowerCase().includes(playerSearch.toLowerCase()));
+  const selectedGame = games.find((game) => game.id === form.gameId);
+  const scoreCategories = selectedGame?.scoreCategories ?? [];
+  const canUseDetailedScoring = form.scoringMode !== "none" && scoreCategories.length > 0;
 
   function getInitialForm(playerNames = knownPlayerNames, availableGames = games) {
     return {
@@ -45,6 +54,7 @@ export default function Plays() {
       date: getToday(),
       scoringMode: "high",
       participants: playerNames.slice(0, 2).map((name) => ({ name, score: "" })),
+      useDetailedScoring: false,
       winner: "",
       duration: "",
       note: "",
@@ -52,10 +62,12 @@ export default function Plays() {
   }
 
   function updateField(field, value) {
+    setFormError("");
     setForm((currentForm) => ({ ...currentForm, [field]: value }));
   }
 
   function toggleParticipant(name) {
+    setFormError("");
     setForm((currentForm) => {
       const isSelected = currentForm.participants.some((participant) => participant.name === name);
 
@@ -69,10 +81,36 @@ export default function Plays() {
   }
 
   function updateParticipantScore(name, score) {
+    setFormError("");
     setForm((currentForm) => ({
       ...currentForm,
       participants: currentForm.participants.map((participant) =>
         participant.name === name ? { ...participant, score } : participant,
+      ),
+    }));
+  }
+
+  function updateParticipantScoreDetail(name, categoryId, value) {
+    setFormError("");
+    setForm((currentForm) => ({
+      ...currentForm,
+      participants: currentForm.participants.map((participant) =>
+        participant.name === name
+          ? {
+              ...participant,
+              scoreDetails: {
+                ...(participant.scoreDetails ?? {}),
+                [categoryId]: value,
+              },
+              score: calculateDetailedScore(
+                {
+                  ...(participant.scoreDetails ?? {}),
+                  [categoryId]: value,
+                },
+                scoreCategories,
+              ),
+            }
+          : participant,
       ),
     }));
   }
@@ -94,12 +132,14 @@ export default function Plays() {
 
   function openCreateForm() {
     setEditingPlayId(null);
+    setFormError("");
     setForm(getInitialForm(sortedPlayerNames, games));
     setIsFormOpen(true);
   }
 
   function openEditForm(play) {
     setEditingPlayId(play.id);
+    setFormError("");
     setForm({
       gameId:
         play.gameId ?? games.find((game) => game.title === play.game)?.id ?? games[0]?.id ?? "",
@@ -110,8 +150,10 @@ export default function Plays() {
           ? play.participants.map((participant) => ({
               name: participant.name,
               score: participant.score ?? "",
+              scoreDetails: participant.scoreDetails ?? {},
             }))
           : [{ name: play.winner ?? "Spieler 1", score: "" }],
+      useDetailedScoring: Boolean(play.useDetailedScoring),
       winner: play.winner ?? "",
       duration: String(play.duration ?? ""),
       note: play.note ?? "",
@@ -124,6 +166,7 @@ export default function Plays() {
     setEditingPlayId(null);
     setNewPlayerName("");
     setPlayerSearch("");
+    setFormError("");
     setForm(getInitialForm(sortedPlayerNames, games));
   }
 
@@ -131,13 +174,30 @@ export default function Plays() {
     event.preventDefault();
 
     if (!form.gameId || !form.participants.length) {
+      setFormError("Bitte wähle mindestens einen Mitspieler aus.");
+      return;
+    }
+
+    const formToSave =
+      form.useDetailedScoring && canUseDetailedScoring
+        ? {
+            ...form,
+            participants: form.participants.map((participant) => ({
+              ...participant,
+              score: calculateDetailedScore(participant.scoreDetails, scoreCategories),
+            })),
+          }
+        : form;
+
+    if (formToSave.scoringMode !== "none" && hasMissingScores(formToSave.participants)) {
+      setFormError("Bitte trage f?r alle ausgew?hlten Mitspieler Punkte ein.");
       return;
     }
 
     if (editingPlayId) {
-      updatePlay(editingPlayId, form);
+      updatePlay(editingPlayId, formToSave);
     } else {
-      addPlay(form);
+      addPlay(formToSave);
     }
 
     closeForm();
@@ -184,7 +244,13 @@ export default function Plays() {
               <select
                 required
                 value={form.gameId}
-                onChange={(event) => updateField("gameId", event.target.value)}
+                onChange={(event) =>
+                  setForm((currentForm) => ({
+                    ...currentForm,
+                    gameId: event.target.value,
+                    useDetailedScoring: false,
+                  }))
+                }
               >
                 {games.map((game) => (
                   <option key={game.id} value={game.id}>
@@ -228,6 +294,16 @@ export default function Plays() {
                 />
               </Field>
             )}
+            {canUseDetailedScoring && (
+              <label className="checkbox-field">
+                <input
+                  checked={Boolean(form.useDetailedScoring)}
+                  type="checkbox"
+                  onChange={(event) => updateField("useDetailedScoring", event.target.checked)}
+                />
+                Detaillierte Punktewertung für dieses Spiel nutzen
+              </label>
+            )}
             <Field label="Notiz">
               <textarea
                 value={form.note}
@@ -265,7 +341,8 @@ export default function Plays() {
                         type="number"
                         value={participant?.score ?? ""}
                         onChange={(event) => updateParticipantScore(name, event.target.value)}
-                        placeholder="Punkte"
+                        readOnly={form.useDetailedScoring}
+                        placeholder={form.useDetailedScoring ? "Gesamt" : "Punkte"}
                       />
                     )}
                   </label>
@@ -301,7 +378,8 @@ export default function Plays() {
                             type="number"
                             value={participant?.score ?? ""}
                             onChange={(event) => updateParticipantScore(name, event.target.value)}
-                            placeholder="Punkte"
+                            readOnly={form.useDetailedScoring}
+                            placeholder={form.useDetailedScoring ? "Gesamt" : "Punkte"}
                           />
                         )}
                       </label>
@@ -330,7 +408,27 @@ export default function Plays() {
                 Hinzufügen
               </button>
             </div>
+
+            {form.useDetailedScoring && canUseDetailedScoring && (
+              <section className="play-scoring-panel">
+                <div className="form-header">
+                  <div>
+                    <p className="eyebrow">Punktewertung</p>
+                    <h3>Detailpunkte erfassen.</h3>
+                  </div>
+                  <span>{scoreCategories.length} Kategorien</span>
+                </div>
+
+                <ScoreDetailMatrix
+                  categories={scoreCategories}
+                  participants={form.participants}
+                  onChange={updateParticipantScoreDetail}
+                />
+              </section>
+            )}
           </section>
+
+          {formError && <p className="form-message form-message-error">{formError}</p>}
 
           <button className="button" type="submit">
             {editingPlayId ? "Änderungen speichern" : "Partie speichern"}
@@ -348,11 +446,18 @@ export default function Plays() {
               </h2>
               <p>{play.note}</p>
               <div className="participant-summary">
-                {(play.participants ?? []).map((participant) => (
-                  <span key={participant.name}>
+                {sortParticipantsByScore(play.participants ?? [], play.scoringMode).map((participant) => (
+                  <span
+                    className={
+                      participant.name.trim().toLowerCase() === normalizedUsername
+                        ? "own-participant-chip"
+                        : ""
+                    }
+                    key={participant.name}
+                  >
                     <PlayerLink name={participant.name}>{participant.name}</PlayerLink>
                     {play.scoringMode !== "none" && participant.score !== null
-                      ? ` · ${participant.score} P.`
+                      ? ` \u00b7 ${participant.score} P.`
                       : ""}
                   </span>
                 ))}
@@ -399,16 +504,114 @@ export default function Plays() {
   );
 }
 
-function getKnownPlayerNames(plays, currentParticipants) {
-  const frequencies = new Map();
+function hasMissingScores(participants) {
+  return participants.some((participant) => {
+    const score = String(participant.score ?? "").trim();
+    return score === "" || !Number.isFinite(Number(score));
+  });
+}
 
-  for (const name of defaultPlayerNames) {
-    frequencies.set(name, 0);
+function sortParticipantsByScore(participants, scoringMode) {
+  if (scoringMode === "none") {
+    return [...participants].sort((first, second) => first.name.localeCompare(second.name, "de"));
+  }
+
+  return [...participants].sort((first, second) => {
+    const firstScore = Number(first.score);
+    const secondScore = Number(second.score);
+
+    if (!Number.isFinite(firstScore) && !Number.isFinite(secondScore)) {
+      return first.name.localeCompare(second.name, "de");
+    }
+
+    if (!Number.isFinite(firstScore)) {
+      return 1;
+    }
+
+    if (!Number.isFinite(secondScore)) {
+      return -1;
+    }
+
+    return scoringMode === "low" ? firstScore - secondScore : secondScore - firstScore;
+  });
+}
+
+function calculateDetailedScore(scoreDetails = {}, categories = []) {
+  return categories.reduce((sum, category) => {
+    const rawValue = Number(scoreDetails[category.id]) || 0;
+    const multiplier = Number(category.multiplier) || 1;
+    const value = rawValue * multiplier;
+
+    return category.type === "minus" ? sum - value : sum + value;
+  }, 0);
+}
+
+function ScoreDetailMatrix({ categories, participants, onChange }) {
+  return (
+    <div className="score-detail-matrix-wrap">
+      <table className="score-detail-matrix">
+        <thead>
+          <tr>
+            <th>Kategorie</th>
+            {participants.map((participant) => (
+              <th key={participant.name}>{participant.name}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {categories.map((category) => (
+            <tr key={category.id}>
+              <th>
+                {category.name} {category.type === "minus" ? "\u2212" : "+"}
+                {Number(category.multiplier) !== 1 ? ` \u00d7 ${category.multiplier}` : ""}
+              </th>
+              {participants.map((participant) => (
+                <td key={`${category.id}-${participant.name}`}>
+                  <input
+                    type="number"
+                    value={participant?.scoreDetails?.[category.id] ?? ""}
+                    onChange={(event) => onChange(participant.name, category.id, event.target.value)}
+                    placeholder="0"
+                  />
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr>
+            <th>Gesamtpunkte</th>
+            {participants.map((participant) => (
+              <td key={`total-${participant.name}`}>
+                <strong>{calculateDetailedScore(participant.scoreDetails, categories)}</strong>
+              </td>
+            ))}
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  );
+}
+
+function getKnownPlayerNames(plays, currentParticipants, preferredPlayerName = "", deletedPlayerNames = []) {
+  const frequencies = new Map();
+  const preferredName = preferredPlayerName.trim();
+  const deletedNames = new Set(deletedPlayerNames);
+  const currentParticipantNames = new Set(
+    currentParticipants.map((participant) => participant.name.trim().toLowerCase()),
+  );
+
+  if (preferredName) {
+    frequencies.set(preferredName, frequencies.get(preferredName) ?? 0);
   }
 
   for (const play of plays) {
     for (const participant of play.participants ?? []) {
-      frequencies.set(participant.name, (frequencies.get(participant.name) ?? 0) + 1);
+      const normalizedName = participant.name.trim().toLowerCase();
+
+      if (!deletedNames.has(normalizedName) || currentParticipantNames.has(normalizedName)) {
+        frequencies.set(participant.name, (frequencies.get(participant.name) ?? 0) + 1);
+      }
     }
   }
 
@@ -419,7 +622,18 @@ function getKnownPlayerNames(plays, currentParticipants) {
   }
 
   return [...frequencies.entries()]
-    .sort((first, second) => second[1] - first[1] || first[0].localeCompare(second[0]))
+    .sort((first, second) => {
+      if (preferredName) {
+        const firstIsPreferred = first[0].toLowerCase() === preferredName.toLowerCase();
+        const secondIsPreferred = second[0].toLowerCase() === preferredName.toLowerCase();
+
+        if (firstIsPreferred !== secondIsPreferred) {
+          return firstIsPreferred ? -1 : 1;
+        }
+      }
+
+      return second[1] - first[1] || first[0].localeCompare(second[0]);
+    })
     .map(([name]) => name);
 }
 

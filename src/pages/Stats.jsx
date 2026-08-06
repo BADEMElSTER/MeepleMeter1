@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
+﻿import { useMemo, useState } from "react";
 import GameLink from "../components/GameLink.jsx";
 import PlayerLink from "../components/PlayerLink.jsx";
+import { useAuth } from "../auth/AuthContext.jsx";
 import { useAppData } from "../data/AppDataContext.jsx";
 
 const tabs = [
@@ -10,9 +11,15 @@ const tabs = [
 ];
 
 export default function Stats() {
+  const { userProfile } = useAuth();
   const { games, plays, stats } = useAppData();
   const [activeTab, setActiveTab] = useState("personal");
   const analytics = useMemo(() => buildAnalytics(games, plays, stats), [games, plays, stats]);
+  const username = userProfile?.username || userProfile?.displayName || "";
+  const personalAnalytics = useMemo(
+    () => buildPersonalAnalytics(plays, username),
+    [plays, username],
+  );
 
   return (
     <section className="page">
@@ -34,14 +41,14 @@ export default function Stats() {
         ))}
       </div>
 
-      {activeTab === "personal" && <PersonalStats analytics={analytics} />}
+      {activeTab === "personal" && <PersonalStats analytics={personalAnalytics} username={username} />}
       {activeTab === "games" && <GameStats analytics={analytics} />}
       {activeTab === "group" && <GroupStats analytics={analytics} />}
     </section>
   );
 }
 
-function PersonalStats({ analytics }) {
+function LegacyPersonalStats({ analytics }) {
   const maxPlays = Math.max(...analytics.players.map((player) => player.plays), 1);
 
   return (
@@ -104,6 +111,234 @@ function PersonalStats({ analytics }) {
       </div>
     </>
   );
+}
+
+function PersonalStats({ analytics, username }) {
+  const [gameSort, setGameSort] = useState({ key: "plays", direction: "desc" });
+  const [placementSort, setPlacementSort] = useState({ key: "placement", direction: "asc" });
+  const sortedGames = sortRows(analytics.games, gameSort);
+  const sortedPlacements = sortRows(analytics.placements, placementSort);
+  const maxGamePlays = Math.max(...analytics.games.map((game) => game.plays), 1);
+
+  return (
+    <>
+      <div className="metric-grid">
+        <Metric label="Gespielte Partien" value={analytics.totalPlays} />
+        <Metric label="Gewonnen" value={analytics.totalWins} />
+        <Metric label="Gewinnquote" value={formatPercent(analytics.winRate)} />
+        <Metric label="Teilnahmequote" value={formatPercent(analytics.participationRate)} />
+        <Metric label="Ø Platzierung" value={formatPlacement(analytics.averagePlacement)} />
+        <Metric
+          label="Meistgespielt"
+          value={
+            analytics.mostPlayedGame ? (
+              <GameLink gameId={analytics.mostPlayedGame.gameId}>{analytics.mostPlayedGame.title}</GameLink>
+            ) : (
+              "–"
+            )
+          }
+        />
+      </div>
+
+      <div className="panel-grid">
+        <article className="panel">
+          <h2>Deine Spiele nach Häufigkeit</h2>
+          <div className="chart-list">
+            {analytics.games.map((game) => (
+              <ChartRow
+                gameId={game.gameId}
+                key={game.title}
+                label={game.title}
+                metaItems={[
+                  { icon: "🎲", label: `${game.plays} Partien gespielt`, value: game.plays },
+                  { icon: "📊", label: `${formatPercent(game.playShare)} deiner Partien`, value: formatPercent(game.playShare) },
+                  { icon: "🏆", label: `${formatPercent(game.winRate)} Gewinnquote`, value: formatPercent(game.winRate) },
+                ]}
+                barLabel={`${game.title}: Orange zeigt ${game.plays} Partien. Grün zeigt ${game.wins} Siege (${formatPercent(game.winRate)} Gewinnquote).`}
+                percent={(game.plays / maxGamePlays) * 100}
+                winPercent={game.winRate * 100}
+              />
+            ))}
+            {!analytics.games.length && (
+              <p className="empty-hint">
+                {username ? "Für dich wurden noch keine Partien erfasst." : "Melde dich an, um persönliche Statistiken zu sehen."}
+              </p>
+            )}
+          </div>
+        </article>
+
+        <article className="panel">
+          <h2>Persönliches Fazit</h2>
+          <div className="list">
+            <PersonalSummaryRow
+              label="Bestes Spiel"
+              value={
+                analytics.bestGame ? (
+                  <>
+                    <GameLink gameId={analytics.bestGame.gameId}>{analytics.bestGame.title}</GameLink> · Ø Platz{" "}
+                    {formatPlacement(analytics.bestGame.averagePlacement)}
+                  </>
+                ) : (
+                  "Noch keine Platzierungen"
+                )
+              }
+            />
+            <PersonalSummaryRow
+              label="Schlechtestes Spiel"
+              value={
+                analytics.worstGame ? (
+                  <>
+                    <GameLink gameId={analytics.worstGame.gameId}>{analytics.worstGame.title}</GameLink> · Ø Platz{" "}
+                    {formatPlacement(analytics.worstGame.averagePlacement)}
+                  </>
+                ) : (
+                  "Noch keine Platzierungen"
+                )
+              }
+            />
+            <PersonalSummaryRow
+              label="Am häufigsten gewonnen gegen"
+              value={
+                analytics.mostWonAgainst ? (
+                  <>
+                    <PlayerLink name={analytics.mostWonAgainst.name}>{analytics.mostWonAgainst.name}</PlayerLink> ·{" "}
+                    {analytics.mostWonAgainst.count} Siege
+                  </>
+                ) : (
+                  "Noch keine direkten Siege"
+                )
+              }
+            />
+            <PersonalSummaryRow
+              label="Am häufigsten verloren gegen"
+              value={
+                analytics.mostLostAgainst ? (
+                  <>
+                    <PlayerLink name={analytics.mostLostAgainst.name}>{analytics.mostLostAgainst.name}</PlayerLink> ·{" "}
+                    {analytics.mostLostAgainst.count} Niederlagen
+                  </>
+                ) : (
+                  "Noch keine direkten Niederlagen"
+                )
+              }
+            />
+          </div>
+        </article>
+      </div>
+
+      <div className="panel-grid">
+        <article className="table-card">
+          <h2>Spiele im Detail</h2>
+          <table>
+            <thead>
+              <tr>
+                <SortableHeader label="Spiel" sortKey="title" sortState={gameSort} onSort={setGameSort} />
+                <SortableHeader label="Partien" sortKey="plays" sortState={gameSort} onSort={setGameSort} />
+                <SortableHeader label="Anteil" sortKey="playShare" sortState={gameSort} onSort={setGameSort} />
+                <SortableHeader label="Siege" sortKey="wins" sortState={gameSort} onSort={setGameSort} />
+                <SortableHeader label="Quote" sortKey="winRate" sortState={gameSort} onSort={setGameSort} />
+                <SortableHeader label="Ø Platz" sortKey="averagePlacement" sortState={gameSort} onSort={setGameSort} />
+              </tr>
+            </thead>
+            <tbody>
+              {sortedGames.map((game) => (
+                <tr key={game.title}>
+                  <td>
+                    <strong>
+                      <GameLink gameId={game.gameId}>{game.title}</GameLink>
+                    </strong>
+                  </td>
+                  <td>{game.plays}</td>
+                  <td>{formatPercent(game.playShare)}</td>
+                  <td>{game.wins}</td>
+                  <td>{formatPercent(game.winRate)}</td>
+                  <td>{formatPlacement(game.averagePlacement)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </article>
+
+        <article className="table-card">
+          <h2>Platzierungen</h2>
+          <table>
+            <thead>
+              <tr>
+                <SortableHeader label="Platz" sortKey="placement" sortState={placementSort} onSort={setPlacementSort} />
+                <SortableHeader label="Anzahl" sortKey="count" sortState={placementSort} onSort={setPlacementSort} />
+                <SortableHeader label="Anteil" sortKey="share" sortState={placementSort} onSort={setPlacementSort} />
+              </tr>
+            </thead>
+            <tbody>
+              {sortedPlacements.map((placement) => (
+                <tr key={placement.placement}>
+                  <td>{placement.placement}. Platz</td>
+                  <td>{placement.count}</td>
+                  <td>{formatPercent(placement.share)}</td>
+                </tr>
+              ))}
+              {!sortedPlacements.length && (
+                <tr>
+                  <td colSpan="3">Noch keine Platzierungen erfasst.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </article>
+      </div>
+    </>
+  );
+}
+
+function PersonalSummaryRow({ label, value }) {
+  return (
+    <div className="list-row">
+      <div>
+        <strong>{label}</strong>
+        <span>{value}</span>
+      </div>
+    </div>
+  );
+}
+
+function SortableHeader({ label, onSort, sortKey, sortState }) {
+  const isActive = sortState.key === sortKey;
+  const direction = isActive ? sortState.direction : "none";
+
+  return (
+    <th>
+      <button
+        className="sort-button"
+        type="button"
+        onClick={() =>
+          onSort({
+            key: sortKey,
+            direction: isActive && sortState.direction === "asc" ? "desc" : "asc",
+          })
+        }
+      >
+        {label} {direction === "asc" ? "↑" : direction === "desc" ? "↓" : "↕"}
+      </button>
+    </th>
+  );
+}
+
+function sortRows(rows, sortState) {
+  return [...rows].sort((first, second) => {
+    const firstValue = first[sortState.key];
+    const secondValue = second[sortState.key];
+
+    if (typeof firstValue === "string" || typeof secondValue === "string") {
+      return sortState.direction === "asc"
+        ? String(firstValue ?? "").localeCompare(String(secondValue ?? ""))
+        : String(secondValue ?? "").localeCompare(String(firstValue ?? ""));
+    }
+
+    const firstNumber = firstValue ?? Number.POSITIVE_INFINITY;
+    const secondNumber = secondValue ?? Number.POSITIVE_INFINITY;
+
+    return sortState.direction === "asc" ? firstNumber - secondNumber : secondNumber - firstNumber;
+  });
 }
 
 function GameStats({ analytics }) {
@@ -254,7 +489,13 @@ function Metric({ label, value }) {
   );
 }
 
-function ChartRow({ gameId, playerName, label, meta, percent }) {
+function ChartRow({ barLabel, gameId, playerName, label, meta, metaItems = [], percent, winPercent = null }) {
+  const resolvedBarLabel =
+    barLabel ??
+    (winPercent === null
+      ? undefined
+      : `Balken zeigt Partien, grüner Anteil zeigt ${Math.round(winPercent)} % Siege bei diesem Spiel.`);
+
   return (
     <div className="chart-row">
       <div>
@@ -263,13 +504,176 @@ function ChartRow({ gameId, playerName, label, meta, percent }) {
           {playerName ? <PlayerLink name={playerName}>{label}</PlayerLink> : null}
           {!gameId && !playerName ? label : null}
         </strong>
-        <span>{meta}</span>
+        {metaItems.length > 0 ? (
+          <span className="icon-meta-list">
+            {metaItems.map((item) => (
+              <span
+                aria-label={item.label}
+                className="icon-meta"
+                key={item.label}
+                role="img"
+                title={item.label}
+              >
+                <span aria-hidden="true" className="icon-meta-symbol">
+                  {item.icon}
+                </span>
+                <span className="icon-meta-value">{item.value}</span>
+              </span>
+            ))}
+          </span>
+        ) : (
+          <span>{meta}</span>
+        )}
       </div>
-      <div className="bar">
-        <span style={{ width: `${Math.max(percent, 4)}%` }} />
+      <div
+        aria-label={resolvedBarLabel}
+        className={winPercent === null ? "bar" : "bar stacked-bar"}
+        role={resolvedBarLabel ? "img" : undefined}
+        title={resolvedBarLabel}
+      >
+        <span className="bar-fill" style={{ width: `${Math.max(percent, 4)}%` }}>
+          {winPercent !== null && (
+            <span
+              className="bar-win-fill"
+              style={{ width: `${Math.max(Math.min(winPercent, 100), 0)}%` }}
+            />
+          )}
+        </span>
       </div>
     </div>
   );
+}
+
+function buildPersonalAnalytics(plays, username) {
+  const normalizedUsername = normalizeName(username);
+  const gameMap = new Map();
+  const placementMap = new Map();
+  const wonAgainstMap = new Map();
+  const lostAgainstMap = new Map();
+  let totalWins = 0;
+  let totalPlacement = 0;
+  let placementCount = 0;
+
+  if (!normalizedUsername) {
+    return createEmptyPersonalAnalytics();
+  }
+
+  const personalPlays = plays.filter((play) =>
+    (play.participants ?? []).some((participant) => normalizeName(participant.name) === normalizedUsername),
+  );
+
+  for (const play of personalPlays) {
+    const placements = getPlayPlacements(play);
+    const ownParticipant = (play.participants ?? []).find(
+      (participant) => normalizeName(participant.name) === normalizedUsername,
+    );
+    const ownPlacement = ownParticipant ? placements.get(ownParticipant.name) ?? null : null;
+    const gameTitle = play.game ?? "Unbekanntes Spiel";
+    const game = gameMap.get(gameTitle) ?? createPersonalGameStats(play.gameId, gameTitle);
+
+    game.plays += 1;
+
+    if (normalizeName(play.winner) === normalizedUsername) {
+      totalWins += 1;
+      game.wins += 1;
+
+      for (const participant of play.participants ?? []) {
+        if (normalizeName(participant.name) !== normalizedUsername) {
+          incrementNameCount(wonAgainstMap, participant.name);
+        }
+      }
+    } else if (play.winner && play.winner !== "Nicht erfasst") {
+      incrementNameCount(lostAgainstMap, play.winner);
+    }
+
+    if (ownPlacement !== null) {
+      totalPlacement += ownPlacement;
+      placementCount += 1;
+      game.totalPlacement += ownPlacement;
+      game.placementCount += 1;
+      placementMap.set(ownPlacement, (placementMap.get(ownPlacement) ?? 0) + 1);
+    }
+
+    gameMap.set(gameTitle, game);
+  }
+
+  const games = [...gameMap.values()]
+    .map((game) => ({
+      ...game,
+      playShare: personalPlays.length ? game.plays / personalPlays.length : 0,
+      winRate: game.plays ? game.wins / game.plays : 0,
+      averagePlacement: game.placementCount ? game.totalPlacement / game.placementCount : null,
+    }))
+    .sort((first, second) => second.plays - first.plays || first.title.localeCompare(second.title));
+  const gamesWithPlacements = games.filter((game) => game.averagePlacement !== null);
+
+  return {
+    totalPlays: personalPlays.length,
+    totalWins,
+    winRate: personalPlays.length ? totalWins / personalPlays.length : 0,
+    participationRate: plays.length ? personalPlays.length / plays.length : 0,
+    averagePlacement: placementCount ? totalPlacement / placementCount : null,
+    games,
+    placements: [...placementMap.entries()]
+      .map(([placement, count]) => ({ placement, count, share: placementCount ? count / placementCount : 0 }))
+      .sort((first, second) => first.placement - second.placement),
+    mostPlayedGame: games[0] ?? null,
+    bestGame:
+      [...gamesWithPlacements].sort(
+        (first, second) => first.averagePlacement - second.averagePlacement || second.wins - first.wins,
+      )[0] ?? null,
+    worstGame:
+      [...gamesWithPlacements].sort(
+        (first, second) => second.averagePlacement - first.averagePlacement || first.wins - second.wins,
+      )[0] ?? null,
+    mostWonAgainst: getTopNameCount(wonAgainstMap),
+    mostLostAgainst: getTopNameCount(lostAgainstMap),
+  };
+}
+
+function createEmptyPersonalAnalytics() {
+  return {
+    totalPlays: 0,
+    totalWins: 0,
+    winRate: 0,
+    participationRate: 0,
+    averagePlacement: null,
+    games: [],
+    placements: [],
+    mostPlayedGame: null,
+    bestGame: null,
+    worstGame: null,
+    mostWonAgainst: null,
+    mostLostAgainst: null,
+  };
+}
+
+function createPersonalGameStats(gameId, title) {
+  return {
+    gameId,
+    title,
+    plays: 0,
+    wins: 0,
+    totalPlacement: 0,
+    placementCount: 0,
+  };
+}
+
+function incrementNameCount(map, name) {
+  if (!name) return;
+  map.set(name, (map.get(name) ?? 0) + 1);
+}
+
+function getTopNameCount(map) {
+  return (
+    [...map.entries()]
+      .map(([name, count]) => ({ name, count }))
+      .sort((first, second) => second.count - first.count || first.name.localeCompare(second.name))[0] ?? null
+  );
+}
+
+function normalizeName(name = "") {
+  return name.trim().toLowerCase();
 }
 
 function buildAnalytics(games, plays, stats) {

@@ -6,7 +6,7 @@ import { useAppData } from "../data/AppDataContext.jsx";
 
 export default function Dashboard() {
   const { userProfile } = useAuth();
-  const { plays, stats } = useAppData();
+  const { games, plays, stats } = useAppData();
   const username = userProfile?.username || userProfile?.displayName;
   const normalizedUsername = username?.trim().toLowerCase() ?? "";
   const personalPlays = normalizedUsername
@@ -16,6 +16,19 @@ export default function Dashboard() {
         ),
       )
     : plays;
+  const ownGames = normalizedUsername
+    ? games.filter(
+        (game) =>
+          (game.ownerNormalized || game.owner?.trim().toLowerCase() || "") ===
+          normalizedUsername,
+      )
+    : games;
+  const groupTotalDuration = plays.reduce((sum, play) => sum + Number(play.duration || 0), 0);
+  const personalTotalDuration = personalPlays.reduce(
+    (sum, play) => sum + Number(play.duration || 0),
+    0,
+  );
+  const personalMostPlayedGame = getMostPlayedGame(personalPlays, games);
 
   return (
     <section className="page">
@@ -26,13 +39,36 @@ export default function Dashboard() {
       </div>
 
       <div className="metric-grid">
-        <Metric label="Spiele in Sammlung" value={stats.totalGames} />
-        <Metric label="Erfasste Partien" value={stats.totalPlays} />
-        <Metric label="Ø gespielte Dauer" value={`${stats.averageDuration} Min.`} />
         <Metric
-          label="Meistgespielt"
+          label="Spiele in Sammlung"
+          value={stats.totalGames}
+          detail={`Eigene Spiele: ${ownGames.length}`}
+        />
+        <Metric
+          label="Erfasste Partien"
+          value={stats.totalPlays}
+          detail={`Eigene Partien: ${personalPlays.length}`}
+        />
+        <Metric
+          label="Gespielte Dauer"
+          value={`${groupTotalDuration} Min.`}
+          detail={`Eigene Dauer: ${personalTotalDuration} Min.`}
+        />
+        <Metric
+          label="Mein meistgespieltes Spiel"
           value={
-            <GameLink gameId={stats.mostPlayedGame.id}>{stats.mostPlayedGame.title}</GameLink>
+            personalMostPlayedGame ? (
+              <GameLink gameId={personalMostPlayedGame.id}>
+                {personalMostPlayedGame.title}
+              </GameLink>
+            ) : (
+              "Noch keine Partie"
+            )
+          }
+          detail={
+            personalMostPlayedGame
+              ? `${personalMostPlayedGame.plays} eigene Partien`
+              : "Noch keine eigenen Partien"
           }
         />
       </div>
@@ -45,19 +81,40 @@ export default function Dashboard() {
           </div>
           <div className="list">
             {personalPlays.length ? (
-              personalPlays.map((play) => (
-                <div className="list-row" key={play.id}>
-                  <div>
-                    <strong>
-                      <GameLink gameId={play.gameId} title={play.game} />
-                    </strong>
-                    <span>{new Date(play.date).toLocaleDateString("de-DE")}</span>
+              personalPlays.map((play) => {
+                const ownPlacement = getOwnPlacement(play, normalizedUsername);
+
+                return (
+                  <div className="list-row dashboard-play-row" key={play.id}>
+                    <div>
+                      <strong>
+                        <GameLink gameId={play.gameId} title={play.game} />
+                      </strong>
+                      <span>{new Date(play.date).toLocaleDateString("de-DE")}</span>
+                    </div>
+                    <div className="dashboard-play-meta">
+                      <span
+                        className="play-badge winner-badge"
+                        title={`Gewinner: ${play.winner}`}
+                        aria-label={`Gewinner: ${play.winner}`}
+                      >
+                        <span aria-hidden="true">🏆</span>
+                        <PlayerLink name={play.winner}>{play.winner}</PlayerLink>
+                      </span>
+                      {ownPlacement && (
+                        <span
+                          className="play-badge placement-badge"
+                          title={`Eigene Platzierung: Platz ${ownPlacement}`}
+                          aria-label={`Eigene Platzierung: Platz ${ownPlacement}`}
+                        >
+                          <span aria-hidden="true">📍</span>
+                          Platz {ownPlacement}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <span>
-                    <PlayerLink name={play.winner}>{play.winner}</PlayerLink>
-                  </span>
-                </div>
-              ))
+                );
+              })
             ) : (
               <p className="page-intro">
                 Für {username} wurden noch keine eigenen Partien erfasst.
@@ -88,11 +145,54 @@ export default function Dashboard() {
   );
 }
 
-function Metric({ label, value }) {
+function Metric({ detail, label, value }) {
   return (
     <article className="metric-card">
-      <span>{label}</span>
-      <strong>{value}</strong>
+      <span className="metric-label">{label}</span>
+      <strong className="metric-value">{value}</strong>
+      {detail && <small className="metric-detail">{detail}</small>}
     </article>
   );
+}
+
+function getMostPlayedGame(personalPlays, games) {
+  if (!personalPlays.length) {
+    return null;
+  }
+
+  const playCounts = personalPlays.reduce((counts, play) => {
+    const key = play.gameId || play.game;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+    return counts;
+  }, new Map());
+  const [gameKey, plays] =
+    [...playCounts.entries()].sort((first, second) => second[1] - first[1])[0] ?? [];
+
+  if (!gameKey) {
+    return null;
+  }
+
+  const game = games.find((entry) => entry.id === gameKey || entry.title === gameKey);
+  return {
+    id: game?.id ?? gameKey,
+    title: game?.title ?? gameKey,
+    plays,
+  };
+}
+
+function getOwnPlacement(play, normalizedUsername) {
+  if (!normalizedUsername || !play.participants?.length || play.scoringMode === "none") {
+    return null;
+  }
+
+  const sortedParticipants = [...play.participants].sort((first, second) =>
+    play.scoringMode === "low"
+      ? Number(first.score) - Number(second.score)
+      : Number(second.score) - Number(first.score),
+  );
+  const ownIndex = sortedParticipants.findIndex(
+    (participant) => participant.name.trim().toLowerCase() === normalizedUsername,
+  );
+
+  return ownIndex >= 0 ? ownIndex + 1 : null;
 }

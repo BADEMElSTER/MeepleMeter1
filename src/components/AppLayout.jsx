@@ -1,15 +1,32 @@
-import { Navigate, NavLink, Outlet, useLocation } from "react-router-dom";
+import { Navigate, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext.jsx";
 
 export default function AppLayout() {
-  const { hasUsername, isAdmin, isAuthLoading, isFirebaseConfigured, logout, user, userProfile } =
+  const { isAdmin, isAuthLoading, isFirebaseConfigured, logout, user, userProfile } =
     useAuth();
-  const location = useLocation();
+  const navigate = useNavigate();
   const canSeeAdmin = !isFirebaseConfigured || isAdmin;
   const username = userProfile?.username || userProfile?.displayName || "";
 
-  if (!isAuthLoading && user && !hasUsername && location.pathname !== "/profile") {
-    return <Navigate to="/profile" replace />;
+  if (isAuthLoading) {
+    return (
+      <div className="app-shell">
+        <main className="app-main">
+          <section className="page">
+            <p className="page-intro">Anmeldung wird geprüft...</p>
+          </section>
+        </main>
+      </div>
+    );
+  }
+
+  if (isFirebaseConfigured && !user) {
+    return <Navigate to="/" replace />;
+  }
+
+  async function handleLogout() {
+    await logout();
+    navigate("/", { replace: true });
   }
 
   return (
@@ -21,11 +38,17 @@ export default function AppLayout() {
         </a>
         <div className="topbar-actions">
           <nav className="side-nav" aria-label="App Navigation">
-            <NavLink to="/dashboard">Dashboard</NavLink>
-            <NavLink to="/games">Sammlung</NavLink>
-            <NavLink to="/plays">Partien</NavLink>
-            <NavLink to="/stats">Statistiken</NavLink>
-            {canSeeAdmin && <NavLink to="/admin">Admin</NavLink>}
+            {isAdmin ? (
+              <NavLink to="/admin">Admin</NavLink>
+            ) : (
+              <>
+                <NavLink to="/dashboard">Dashboard</NavLink>
+                <NavLink to="/games">Sammlung</NavLink>
+                <NavLink to="/plays">Partien</NavLink>
+                <NavLink to="/stats">Statistiken</NavLink>
+                {canSeeAdmin && <NavLink to="/admin">Admin</NavLink>}
+              </>
+            )}
           </nav>
           {user && (
             <div className="profile-actions">
@@ -33,7 +56,7 @@ export default function AppLayout() {
                 <span className="profile-icon" aria-hidden="true" />
                 {username && <span className="profile-name">{username}</span>}
               </NavLink>
-              <button className="nav-button" type="button" onClick={logout}>
+              <button className="nav-button" type="button" onClick={handleLogout}>
                 Abmelden
               </button>
             </div>

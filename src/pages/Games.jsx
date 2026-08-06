@@ -1,12 +1,14 @@
 import { useRef, useState } from "react";
 import Field from "../components/Field.jsx";
 import GameLink from "../components/GameLink.jsx";
+import { useAuth } from "../auth/AuthContext.jsx";
 import { useAppData } from "../data/AppDataContext.jsx";
 import { gameCatalog } from "../data/gameCatalog.js";
 
 const initialForm = {
   title: "",
   category: "",
+  owner: "",
   minPlayers: "1",
   maxPlayers: "4",
   duration: "",
@@ -18,11 +20,13 @@ const initialForm = {
   catalogImage: null,
   catalogExpansions: [],
   expansions: "",
+  scoreCategories: [],
 };
 
 const sortableColumns = [
   { key: "title", label: "Spiel", type: "text" },
   { key: "category", label: "Kategorie", type: "text" },
+  { key: "owner", label: "Eigentümer", type: "text" },
   { key: "catalogYear", label: "Jahr", type: "number" },
   { key: "minPlayers", label: "Min.", type: "number" },
   { key: "maxPlayers", label: "Max.", type: "number" },
@@ -54,6 +58,7 @@ function getGameForm(game) {
   return {
     title: game.title,
     category: game.category,
+    owner: game.owner ?? "",
     minPlayers: String(game.minPlayers),
     maxPlayers: String(game.maxPlayers),
     duration: String(game.duration),
@@ -65,11 +70,24 @@ function getGameForm(game) {
     catalogImage: game.catalogImage ?? null,
     catalogExpansions: game.catalogExpansions ?? [],
     expansions: (game.expansions ?? []).map((expansion) => expansion.name).join(", "),
+    scoreCategories: game.scoreCategories ?? [],
+  };
+}
+
+function createScoreCategory() {
+  return {
+    id: crypto.randomUUID?.() ?? `category-${Date.now()}`,
+    name: "",
+    type: "plus",
+    multiplier: 1,
   };
 }
 
 export default function Games() {
+  const { userProfile } = useAuth();
   const { stats, addGame, updateGame, deleteGame } = useAppData();
+  const username = userProfile?.username || userProfile?.displayName || "";
+  const normalizedUsername = username.trim().toLowerCase();
   const [sortConfig, setSortConfig] = useState({ key: "title", direction: "asc" });
   const games = sortGames(stats.gamesWithPlayCounts, sortConfig);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -77,6 +95,7 @@ export default function Games() {
   const [form, setForm] = useState(initialForm);
   const [catalogQuery, setCatalogQuery] = useState("");
   const [isCatalogSearchOpen, setIsCatalogSearchOpen] = useState(true);
+  const [isScoringEditorOpen, setIsScoringEditorOpen] = useState(false);
   const [formMessage, setFormMessage] = useState("");
   const formRef = useRef(null);
   const ownDataRef = useRef(null);
@@ -100,18 +119,25 @@ export default function Games() {
 
   function openCreateForm() {
     setEditingGameId(null);
-    setForm(initialForm);
+    setForm({ ...initialForm, owner: username });
     setCatalogQuery("");
     setIsCatalogSearchOpen(true);
+    setIsScoringEditorOpen(false);
     setFormMessage("");
     setIsFormOpen(true);
   }
 
   function openEditForm(game) {
+    if (!canManageGame(game, normalizedUsername)) {
+      setFormMessage("Du kannst nur eigene Spiele bearbeiten.");
+      return;
+    }
+
     setEditingGameId(game.id);
     setForm(getGameForm(game));
     setCatalogQuery("");
     setIsCatalogSearchOpen(false);
+    setIsScoringEditorOpen(Boolean(game.scoreCategories?.length));
     setFormMessage("");
     setIsFormOpen(true);
     window.setTimeout(() => {
@@ -122,9 +148,10 @@ export default function Games() {
 
   function closeForm() {
     setEditingGameId(null);
-    setForm(initialForm);
+    setForm({ ...initialForm, owner: username });
     setCatalogQuery("");
     setIsCatalogSearchOpen(true);
+    setIsScoringEditorOpen(false);
     setFormMessage("");
     setIsFormOpen(false);
   }
@@ -134,6 +161,7 @@ export default function Games() {
       ...initialForm,
       title: entry.name,
       category: "Katalogspiel",
+      owner: username,
       minPlayers: String(entry.minPlayers ?? 1),
       maxPlayers: String(entry.maxPlayers ?? entry.minPlayers ?? 1),
       duration: String(entry.maxPlayTime ?? entry.minPlayTime ?? 0),
@@ -145,6 +173,7 @@ export default function Games() {
       catalogImage: entry.image,
       catalogExpansions: entry.expansions ?? [],
       expansions: (entry.expansions ?? []).map((expansion) => expansion.name).join(", "),
+      scoreCategories: [],
     });
     setCatalogQuery("");
     setIsCatalogSearchOpen(false);
@@ -167,10 +196,56 @@ export default function Games() {
     updateField("category", value);
   }
 
+  function openScoringEditor() {
+    setIsScoringEditorOpen(true);
+    setForm((currentForm) => ({
+      ...currentForm,
+      scoreCategories: currentForm.scoreCategories?.length
+        ? currentForm.scoreCategories
+        : [createScoreCategory()],
+    }));
+  }
+
+  function addScoreCategory() {
+    setForm((currentForm) => ({
+      ...currentForm,
+      scoreCategories: [...(currentForm.scoreCategories ?? []), createScoreCategory()],
+    }));
+  }
+
+  function updateScoreCategory(categoryId, field, value) {
+    setForm((currentForm) => ({
+      ...currentForm,
+      scoreCategories: (currentForm.scoreCategories ?? []).map((category) =>
+        category.id === categoryId ? { ...category, [field]: value } : category,
+      ),
+    }));
+  }
+
+  function removeScoreCategory(categoryId) {
+    setForm((currentForm) => ({
+      ...currentForm,
+      scoreCategories:
+        (currentForm.scoreCategories ?? []).length === 1
+          ? [createScoreCategory()]
+          : (currentForm.scoreCategories ?? []).filter((category) => category.id !== categoryId),
+    }));
+  }
+
   function handleSubmit(event) {
     event.preventDefault();
 
     if (!form.title.trim()) {
+      return;
+    }
+
+    if (!form.owner.trim()) {
+      setFormMessage("Bitte trage einen Eigentümer ein.");
+      return;
+    }
+
+    if (normalizedUsername && form.owner.trim().toLowerCase() !== normalizedUsername) {
+      setFormMessage("Der Eigentümer muss deinem Benutzernamen entsprechen.");
       return;
     }
 
@@ -189,6 +264,11 @@ export default function Games() {
   }
 
   function handleDelete(game) {
+    if (!canManageGame(game, normalizedUsername)) {
+      setFormMessage("Du kannst nur eigene Spiele löschen.");
+      return;
+    }
+
     const confirmed = window.confirm(
       `Spiel "${game.title}" löschen? Zugehörige Partien werden ebenfalls gelöscht.`,
     );
@@ -299,6 +379,15 @@ export default function Games() {
                 placeholder="z. B. Heat"
               />
             </Field>
+            <Field label="Eigentümer">
+              <input
+                required
+                readOnly
+                value={form.owner}
+                onChange={(event) => updateField("owner", event.target.value)}
+                placeholder="Benutzername"
+              />
+            </Field>
             <Field label="Kategorie">
               <select
                 value={categorySelectValue}
@@ -366,6 +455,79 @@ export default function Games() {
               />
             </Field>
           </div>
+
+          <section className={`inline-scoring-panel ${isScoringEditorOpen ? "is-open" : ""}`}>
+            <div className="form-header">
+              <div>
+                <p className="eyebrow">Punktewertung</p>
+                <h3>Optionale Detailwertung anlegen.</h3>
+                <p className="scoring-panel-hint">
+                  Kategorien, Plus-/Minuspunkte und Multiplikatoren f\u00fcr dieses Spiel.
+                </p>
+              </div>
+              <button
+                className="button button-secondary"
+                type="button"
+                onClick={() => (isScoringEditorOpen ? setIsScoringEditorOpen(false) : openScoringEditor())}
+              >
+                {isScoringEditorOpen ? "Punktewertung einklappen" : "Punktewertung anlegen"}
+              </button>
+            </div>
+
+            {isScoringEditorOpen && (
+              <>
+                <div className="score-category-toolbar">
+                  <button className="button button-secondary" type="button" onClick={addScoreCategory}>
+                    Kategorie hinzuf\u00fcgen
+                  </button>
+                </div>
+                <div className="score-category-list">
+                  {(form.scoreCategories ?? []).map((category) => (
+                    <div className="score-category-row" key={category.id}>
+                      <Field label="Kategorie">
+                        <input
+                          value={category.name}
+                          onChange={(event) =>
+                            updateScoreCategory(category.id, "name", event.target.value)
+                          }
+                          placeholder="z. B. St\u00e4dte, Karten, M\u00fcnzen"
+                        />
+                      </Field>
+                      <Field label="Wertung">
+                        <select
+                          value={category.type}
+                          onChange={(event) =>
+                            updateScoreCategory(category.id, "type", event.target.value)
+                          }
+                        >
+                          <option value="plus">Pluspunkte</option>
+                          <option value="minus">Minuspunkte</option>
+                        </select>
+                      </Field>
+                      <Field label="Multiplikator">
+                        <input
+                          min="0"
+                          step="0.5"
+                          type="number"
+                          value={category.multiplier}
+                          onChange={(event) =>
+                            updateScoreCategory(category.id, "multiplier", event.target.value)
+                          }
+                        />
+                      </Field>
+                      <button
+                        className="ghost-button danger-action score-category-delete"
+                        type="button"
+                        onClick={() => removeScoreCategory(category.id)}
+                      >
+                        Entfernen
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </section>
           <button className="button" type="submit">
             {editingGameId ? "Änderungen speichern" : "Spiel speichern"}
           </button>
@@ -376,7 +538,7 @@ export default function Games() {
         <table>
           <thead>
             <tr>
-              {sortableColumns.slice(0, 5).map((column) => (
+              {sortableColumns.slice(0, 6).map((column) => (
                 <th key={column.key}>
                   <SortButton column={column} sortConfig={sortConfig} onSort={updateSort} />
                 </th>
@@ -398,7 +560,7 @@ export default function Games() {
                   </div>
                 </div>
               </th>
-              {sortableColumns.slice(5).map((column) => (
+              {sortableColumns.slice(6).map((column) => (
                 <th key={column.key}>
                   <SortButton column={column} sortConfig={sortConfig} onSort={updateSort} />
                 </th>
@@ -415,6 +577,7 @@ export default function Games() {
                   </strong>
                 </td>
                 <td>{game.category}</td>
+                <td>{game.owner || "Nicht zugeordnet"}</td>
                 <td>{game.catalogYear ?? "–"}</td>
                 <td>{game.minPlayers}</td>
                 <td>{game.maxPlayers}</td>
@@ -427,26 +590,38 @@ export default function Games() {
                 <td>{game.expansions?.length ? game.expansions.length : "–"}</td>
                 <td>{game.plays}</td>
                 <td>
-                  <div className="table-actions compact-actions">
-                    <button
-                      aria-label={`${game.title} bearbeiten`}
-                      className="icon-action edit-action"
-                      title="Bearbeiten"
-                      type="button"
-                      onClick={() => openEditForm(game)}
-                    >
-                      <span aria-hidden="true" className="icon-pencil" />
-                    </button>
-                    <button
-                      aria-label={`${game.title} l?schen`}
-                      className="icon-action delete-action"
-                      title="L?schen"
-                      type="button"
-                      onClick={() => handleDelete(game)}
-                    >
-                      <span aria-hidden="true" className="icon-cross" />
-                    </button>
-                  </div>
+                  {canManageGame(game, normalizedUsername) ? (
+                    <div className="table-actions compact-actions">
+                      <a
+                        aria-label={`Punktewertung für ${game.title} bearbeiten`}
+                        className="icon-action scoring-action"
+                        href={`/games/${game.id}/scoring`}
+                        title="Punktewertung"
+                      >
+                        <span aria-hidden="true">Σ</span>
+                      </a>
+                      <button
+                        aria-label={`${game.title} bearbeiten`}
+                        className="icon-action edit-action"
+                        title="Bearbeiten"
+                        type="button"
+                        onClick={() => openEditForm(game)}
+                      >
+                        <span aria-hidden="true" className="icon-pencil" />
+                      </button>
+                      <button
+                        aria-label={`${game.title} löschen`}
+                        className="icon-action delete-action"
+                        title="Löschen"
+                        type="button"
+                        onClick={() => handleDelete(game)}
+                      >
+                        <span aria-hidden="true" className="icon-cross" />
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="table-note">Nur Eigentümer</span>
+                  )}
                 </td>
               </tr>
             ))}
@@ -487,6 +662,15 @@ function sortGames(games, sortConfig) {
 
     return String(firstValue).localeCompare(String(secondValue), "de") * directionFactor;
   });
+}
+
+function canManageGame(game, normalizedUsername) {
+  if (!normalizedUsername) {
+    return false;
+  }
+
+  const owner = game.ownerNormalized || game.owner?.trim().toLowerCase() || "";
+  return owner === normalizedUsername;
 }
 
 function getCatalogResults(query, existingGames) {

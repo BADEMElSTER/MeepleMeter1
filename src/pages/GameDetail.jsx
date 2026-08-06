@@ -101,6 +101,11 @@ function OverviewTab({ game, statistics }) {
       </div>
 
       <div className="panel-grid">
+        <article className="panel">
+          <h2>Spieldauer nach Spieleranzahl</h2>
+          <DurationScale groups={statistics.durationByPlayerCount} maxDuration={statistics.maxDuration} />
+        </article>
+
         <article className="panel highlight-panel">
           <p className="eyebrow">Kurzfazit</p>
           <h2>
@@ -115,6 +120,75 @@ function OverviewTab({ game, statistics }) {
       </div>
     </>
   );
+}
+
+function DurationScale({ groups, maxDuration }) {
+  const scaleMax = Math.max(maxDuration, 1);
+  const ticks = buildDurationTicks(scaleMax);
+
+  if (!groups.length) {
+    return <p className="empty-hint">Noch keine Spieldauern mit Spieleranzahl erfasst.</p>;
+  }
+
+  return (
+    <div className="combined-duration-scale">
+      <div
+        aria-label={`Gemeinsame Skala der durchschnittlichen Spieldauer nach Spieleranzahl. Skala von 0 bis ${formatMinutes(scaleMax)}.`}
+        className="duration-scale"
+        title={`Skala von 0 bis ${formatMinutes(scaleMax)}`}
+      >
+        <span className="duration-scale-line" />
+        {ticks.map((tick) => (
+          <span
+            aria-hidden="true"
+            className={tick.isMajor ? "duration-tick duration-tick-major" : "duration-tick"}
+            key={tick.value}
+            style={{ left: `${getScalePosition(tick.value, scaleMax)}%` }}
+            title={formatMinutes(tick.value)}
+          >
+            {tick.isMajor && <small>{tick.value}</small>}
+          </span>
+        ))}
+        {groups.map((group) => {
+          const markerTitle = `${group.playerCount} Spieler \u00b7 \u00d8 ${formatMinutes(group.averageDuration)} \u00b7 ${group.durations.length} Partien \u00b7 k\u00fcrzeste Partie ${formatMinutes(group.minDuration)} \u00b7 l\u00e4ngste Partie ${formatMinutes(group.maxDuration)}`;
+
+          return (
+            <button
+              aria-label={markerTitle}
+              className="duration-average-marker combined-duration-marker"
+              key={group.playerCount}
+              style={{ left: `${getScalePosition(group.averageDuration, scaleMax)}%` }}
+              title={markerTitle}
+              type="button"
+            >
+              <span>{group.playerCount}P</span>
+              <small>{formatMinutes(group.averageDuration)}</small>
+            </button>
+          );
+        })}
+      </div>
+      <div className="duration-scale-labels">
+        <span>0 Min.</span>
+        <span>{formatMinutes(scaleMax)}</span>
+      </div>
+    </div>
+  );
+}
+
+function buildDurationTicks(maxDuration) {
+  const roundedMax = Math.ceil(maxDuration / 30) * 30;
+  const ticks = [];
+
+  for (let value = 30; value <= roundedMax; value += 30) {
+    ticks.push({ value, isMajor: value % 60 === 0 });
+  }
+
+  return ticks;
+}
+
+function getScalePosition(value, maxValue) {
+  const position = maxValue ? (value / maxValue) * 100 : 0;
+  return Math.min(Math.max(position, 8), 92);
 }
 
 function InfoTab({ game }) {
@@ -216,13 +290,28 @@ function buildGameStatistics(game, plays) {
     )
     .sort((first, second) => new Date(second.date) - new Date(first.date));
   const playerMap = new Map();
+  const durationByPlayerCountMap = new Map();
   const scoreRecords = buildInitialScoreRecords();
   const totalDuration = matchingPlays.reduce((sum, play) => sum + Number(play.duration || 0), 0);
 
   for (const play of matchingPlays) {
     const placements = getPlayPlacements(play);
     const lossNames = getLossNames(play, placements);
+    const duration = Number(play.duration || 0);
+    const playerCount = Number(play.players || play.participants?.length || 0);
     updateScoreRecords(scoreRecords, play);
+
+    if (duration > 0 && playerCount > 0) {
+      const durationGroup = durationByPlayerCountMap.get(playerCount) ?? {
+        playerCount,
+        durations: [],
+        totalDuration: 0,
+      };
+
+      durationGroup.durations.push(duration);
+      durationGroup.totalDuration += duration;
+      durationByPlayerCountMap.set(playerCount, durationGroup);
+    }
 
     for (const participant of play.participants ?? []) {
       const player = playerMap.get(participant.name) ?? {
@@ -253,6 +342,16 @@ function buildGameStatistics(game, plays) {
       averagePlacement: player.placementCount ? player.totalPlacement / player.placementCount : null,
     }))
     .sort((first, second) => second.plays - first.plays || second.wins - first.wins);
+  const durationByPlayerCount = [...durationByPlayerCountMap.values()]
+    .map((group) => ({
+      ...group,
+      averageDuration: group.totalDuration / group.durations.length,
+      durations: [...group.durations].sort((first, second) => first - second),
+      minDuration: Math.min(...group.durations),
+      maxDuration: Math.max(...group.durations),
+    }))
+    .sort((first, second) => first.playerCount - second.playerCount);
+  const maxDuration = Math.max(...durationByPlayerCount.flatMap((group) => group.durations), 0);
 
   return {
     playCount: matchingPlays.length,
@@ -260,6 +359,8 @@ function buildGameStatistics(game, plays) {
     mostWinsPlayer: [...players].sort((first, second) => second.wins - first.wins || second.plays - first.plays)[0],
     mostLossesPlayer: [...players].sort((first, second) => second.losses - first.losses || second.plays - first.plays)[0],
     scoreRecords,
+    durationByPlayerCount,
+    maxDuration,
     players,
     plays: matchingPlays,
   };
@@ -456,4 +557,3 @@ function buildVirtualGame(title, plays) {
 function normalizeTitle(title = "") {
   return String(title).trim().toLowerCase();
 }
-
