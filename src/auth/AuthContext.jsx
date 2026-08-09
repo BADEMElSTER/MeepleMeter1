@@ -8,10 +8,19 @@ import {
   updatePassword,
 } from "firebase/auth";
 import { doc, getDoc, runTransaction, serverTimestamp, setDoc } from "firebase/firestore";
-import { firebaseAuth, firestoreDb, isFirebaseConfigured } from "../firebase/client.js";
+import {
+  firebaseAdminEmails,
+  firebaseAuth,
+  firestoreDb,
+  isFirebaseConfigured,
+} from "../firebase/client.js";
 import { roles } from "./roles.js";
 
 const AuthContext = createContext(null);
+
+function getRoleForEmail(email, existingRole = roles.member) {
+  return firebaseAdminEmails.includes(email?.trim().toLowerCase()) ? roles.admin : existingRole;
+}
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
@@ -39,6 +48,7 @@ export function AuthProvider({ children }) {
 
       if (profileSnapshot.exists()) {
         const profile = profileSnapshot.data();
+        const resolvedRole = getRoleForEmail(currentUser.email, profile.role ?? roles.member);
 
         if (profile.usernameNormalized && currentUser.email) {
           await setDoc(
@@ -53,14 +63,18 @@ export function AuthProvider({ children }) {
           );
         }
 
-        setUserProfile(profile);
+        if (resolvedRole !== profile.role) {
+          await setDoc(profileRef, { role: resolvedRole, updatedAt: serverTimestamp() }, { merge: true });
+        }
+
+        setUserProfile({ ...profile, role: resolvedRole });
       } else {
         const profile = {
           email: currentUser.email,
           displayName: "",
           username: "",
           usernameNormalized: "",
-          role: roles.member,
+          role: getRoleForEmail(currentUser.email),
           createdAt: serverTimestamp(),
         };
         await setDoc(profileRef, profile);
@@ -85,7 +99,12 @@ export function AuthProvider({ children }) {
 
     const profileSnapshot = await getDoc(doc(firestoreDb, "users", credential.user.uid));
 
-    return { role: profileSnapshot.data()?.role ?? null };
+    return {
+      role: getRoleForEmail(
+        credential.user.email,
+        profileSnapshot.data()?.role ?? roles.member,
+      ),
+    };
   }
 
   async function register(email, password, usernameInput) {
@@ -123,7 +142,7 @@ export function AuthProvider({ children }) {
           displayName: username,
           username,
           usernameNormalized,
-          role: roles.member,
+          role: getRoleForEmail(credential.user.email),
           createdAt: serverTimestamp(),
         });
       });

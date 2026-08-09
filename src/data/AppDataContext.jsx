@@ -155,6 +155,19 @@ function buildPlay(playInput, games, existingPlay = {}) {
   };
 }
 
+function sortPlaysByGameDate(playList) {
+  return [...playList].sort((first, second) => {
+    const firstTime = new Date(first.date ?? 0).getTime();
+    const secondTime = new Date(second.date ?? 0).getTime();
+
+    if (secondTime !== firstTime) {
+      return secondTime - firstTime;
+    }
+
+    return String(second.id ?? "").localeCompare(String(first.id ?? ""), "de");
+  });
+}
+
 function normalizePlayerProfile(profile) {
   return {
     name: profile.name?.trim() ?? "",
@@ -242,6 +255,7 @@ export function AppDataProvider({ children }) {
       gamesWithPlayCounts,
     };
   }, [games, plays]);
+  const sortedPlays = useMemo(() => sortPlaysByGameDate(plays), [plays]);
 
   function addGame(gameInput) {
     let wasAdded = false;
@@ -417,7 +431,7 @@ export function AppDataProvider({ children }) {
   const value = useMemo(
     () => ({
       games,
-      plays,
+      plays: sortedPlays,
       playerProfiles,
       stats,
       addGame,
@@ -432,7 +446,7 @@ export function AppDataProvider({ children }) {
       renamePlayer,
       resetLocalData,
     }),
-    [games, plays, playerProfiles, stats],
+    [games, sortedPlays, playerProfiles, stats],
   );
 
   return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>;

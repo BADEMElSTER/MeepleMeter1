@@ -37,9 +37,9 @@ export default function Plays() {
   const knownPlayerNames = getKnownPlayerNames(plays, [], username, deletedPlayerNames);
   const [form, setForm] = useState(getInitialForm(knownPlayerNames, games));
   const sortedPlayerNames = getKnownPlayerNames(plays, form.participants, username, deletedPlayerNames);
-  const selectablePlayerNames = [
+  const selectablePlayerNames = sortSelectablePlayerNames([
     ...new Set([...sortedPlayerNames, ...form.participants.map((participant) => participant.name)]),
-  ];
+  ], form.participants, plays, username);
   const detailedPlayerNames = selectablePlayerNames.slice(0, 4);
   const dropdownPlayerNames = selectablePlayerNames
     .filter((name) => !detailedPlayerNames.includes(name))
@@ -437,68 +437,105 @@ export default function Plays() {
       )}
 
       <div className="play-list">
-        {plays.map((play) => (
-          <article className="play-card" key={play.id}>
-            <div>
-              <span>{new Date(play.date).toLocaleDateString("de-DE")}</span>
-              <h2>
-                <GameLink gameId={play.gameId} title={play.game} />
-              </h2>
-              <p>{play.note}</p>
-              <div className="participant-summary">
-                {sortParticipantsByScore(play.participants ?? [], play.scoringMode).map((participant) => (
-                  <span
-                    className={
-                      participant.name.trim().toLowerCase() === normalizedUsername
-                        ? "own-participant-chip"
-                        : ""
-                    }
-                    key={participant.name}
-                  >
-                    <PlayerLink name={participant.name}>{participant.name}</PlayerLink>
-                    {play.scoringMode !== "none" && participant.score !== null
-                      ? ` \u00b7 ${participant.score} P.`
-                      : ""}
-                  </span>
-                ))}
+        {plays.map((play) => {
+          const sortedParticipants = sortParticipantsByScore(play.participants ?? [], play.scoringMode);
+
+          return (
+            <article className="play-card compact-play-card" key={play.id}>
+              <div className="play-card-main">
+                <div className="play-card-topline">
+                  <span>{new Date(play.date).toLocaleDateString("de-DE")}</span>
+                  <strong>{play.duration} Min.</strong>
+                  <details className="play-info-menu">
+                    <summary aria-label={`Weitere Informationen zu ${play.game}`}>i</summary>
+                    <div className="play-info-content">
+                      <p>{play.note || "Keine Notiz erfasst."}</p>
+                      <dl>
+                        <div>
+                          <dt>Mitspieler</dt>
+                          <dd>{play.players}</dd>
+                        </div>
+                        <div>
+                          <dt>Wertung</dt>
+                          <dd>{getScoringLabel(play.scoringMode)}</dd>
+                        </div>
+                        <div>
+                          <dt>Gewinner</dt>
+                          <dd>
+                            <PlayerLink name={play.winner}>{play.winner}</PlayerLink>
+                          </dd>
+                        </div>
+                      </dl>
+                      <div className="play-card-actions">
+                        <button
+                          className="ghost-button inline-action"
+                          type="button"
+                          onClick={() => openEditForm(play)}
+                        >
+                          Bearbeiten
+                        </button>
+                        <button
+                          className="ghost-button danger-action inline-action"
+                          type="button"
+                          onClick={() => handleDelete(play)}
+                        >
+                          L?schen
+                        </button>
+                      </div>
+                    </div>
+                  </details>
+                </div>
+                <h2>
+                  <GameLink gameId={play.gameId} title={play.game} />
+                </h2>
+                <div className="participant-summary">
+                  {sortedParticipants.map((participant) => {
+                    const isWinner = participant.name === play.winner;
+
+                    return (
+                      <span
+                        className={
+                          participant.name.trim().toLowerCase() === normalizedUsername
+                            ? "own-participant-chip"
+                            : ""
+                        }
+                        key={participant.name}
+                      >
+                        {isWinner && (
+                          <span className="winner-trophy" aria-label="Gewinner" title="Gewinner" />
+                        )}
+                        <PlayerLink name={participant.name}>{participant.name}</PlayerLink>
+                        {play.scoringMode !== "none" && participant.score !== null
+                          ? ` - ${participant.score} P.`
+                          : ""}
+                      </span>
+                    );
+                  })}
+                </div>
               </div>
-              <button
-                className="ghost-button inline-action"
-                type="button"
-                onClick={() => openEditForm(play)}
-              >
-                Bearbeiten
-              </button>
-              <button
-                className="ghost-button danger-action inline-action"
-                type="button"
-                onClick={() => handleDelete(play)}
-              >
-                Löschen
-              </button>
-            </div>
-            <dl>
-              <div>
-                <dt>Mitspieler</dt>
-                <dd>{play.players}</dd>
-              </div>
-              <div>
-                <dt>Wertung</dt>
-                <dd>{getScoringLabel(play.scoringMode)}</dd>
-              </div>
-              <div>
-                <dt>Gewinner</dt>
-                <dd>
-                  <PlayerLink name={play.winner}>{play.winner}</PlayerLink>
-                </dd>
-              </div>
-              <div>
-                <dt>Dauer</dt>
-                <dd>{play.duration} Min.</dd>
-              </div>
-            </dl>
-          </article>
-        ))}
+              <dl className="play-card-meta">
+                <div>
+                  <dt>Mitspieler</dt>
+                  <dd>{play.players}</dd>
+                </div>
+                <div>
+                  <dt>Wertung</dt>
+                  <dd>{getScoringLabel(play.scoringMode)}</dd>
+                </div>
+                <div>
+                  <dt>Gewinner</dt>
+                  <dd>
+                    <PlayerLink name={play.winner}>{play.winner}</PlayerLink>
+                  </dd>
+                </div>
+                <div>
+                  <dt>Dauer</dt>
+                  <dd>{play.duration} Min.</dd>
+                </div>
+              </dl>
+            </article>
+          );
+        })}
       </div>
     </section>
   );
@@ -635,5 +672,45 @@ function getKnownPlayerNames(plays, currentParticipants, preferredPlayerName = "
       return second[1] - first[1] || first[0].localeCompare(second[0]);
     })
     .map(([name]) => name);
+}
+
+function sortSelectablePlayerNames(playerNames, selectedParticipants, plays, preferredPlayerName = "") {
+  const selectedNames = new Set(
+    selectedParticipants.map((participant) => participant.name.trim().toLowerCase()),
+  );
+  const preferredName = preferredPlayerName.trim().toLowerCase();
+  const frequencies = new Map();
+
+  for (const play of plays) {
+    for (const participant of play.participants ?? []) {
+      const normalizedName = participant.name.trim().toLowerCase();
+      frequencies.set(normalizedName, (frequencies.get(normalizedName) ?? 0) + 1);
+    }
+  }
+
+  return [...playerNames].sort((firstName, secondName) => {
+    const firstNormalized = firstName.trim().toLowerCase();
+    const secondNormalized = secondName.trim().toLowerCase();
+    const firstIsSelected = selectedNames.has(firstNormalized);
+    const secondIsSelected = selectedNames.has(secondNormalized);
+
+    if (firstIsSelected !== secondIsSelected) {
+      return firstIsSelected ? -1 : 1;
+    }
+
+    if (preferredName) {
+      const firstIsPreferred = firstNormalized === preferredName;
+      const secondIsPreferred = secondNormalized === preferredName;
+
+      if (firstIsPreferred !== secondIsPreferred) {
+        return firstIsPreferred ? -1 : 1;
+      }
+    }
+
+    return (
+      (frequencies.get(secondNormalized) ?? 0) - (frequencies.get(firstNormalized) ?? 0) ||
+      firstName.localeCompare(secondName, "de")
+    );
+  });
 }
 

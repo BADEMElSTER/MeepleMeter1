@@ -534,7 +534,7 @@ export default function Games() {
         </form>
       )}
 
-      <div className="table-card">
+      <div className="table-card collection-table-card">
         <table>
           <thead>
             <tr>
@@ -572,9 +572,30 @@ export default function Games() {
             {games.map((game) => (
               <tr key={game.id}>
                 <td className="game-title-cell">
-                  <strong>
+                  <strong className="desktop-game-title">
                     <GameLink gameId={game.id}>{game.title}</GameLink>
                   </strong>
+                  <div className="mobile-game-summary">
+                    <div className="mobile-game-summary-top">
+                      <strong>
+                        <GameLink gameId={game.id}>{game.title}</GameLink>
+                      </strong>
+                      <span className="mobile-game-owner">{game.owner || "Nicht zugeordnet"}</span>
+                      <GameActions
+                        game={game}
+                        normalizedUsername={normalizedUsername}
+                        onDelete={handleDelete}
+                        onEdit={openEditForm}
+                      />
+                    </div>
+                    <div className="mobile-game-summary-meta">
+                      <span>{game.category}</span>
+                      <span>{game.catalogYear ?? "–"}</span>
+                      <span>{game.minPlayers}-{game.maxPlayers} Spieler</span>
+                      <span>{game.duration} Min.</span>
+                      <span>{game.plays} Partien</span>
+                    </div>
+                  </div>
                 </td>
                 <td>{game.category}</td>
                 <td>{game.owner || "Nicht zugeordnet"}</td>
@@ -590,38 +611,12 @@ export default function Games() {
                 <td>{game.expansions?.length ? game.expansions.length : "–"}</td>
                 <td>{game.plays}</td>
                 <td>
-                  {canManageGame(game, normalizedUsername) ? (
-                    <div className="table-actions compact-actions">
-                      <a
-                        aria-label={`Punktewertung für ${game.title} bearbeiten`}
-                        className="icon-action scoring-action"
-                        href={`/games/${game.id}/scoring`}
-                        title="Punktewertung"
-                      >
-                        <span aria-hidden="true">Σ</span>
-                      </a>
-                      <button
-                        aria-label={`${game.title} bearbeiten`}
-                        className="icon-action edit-action"
-                        title="Bearbeiten"
-                        type="button"
-                        onClick={() => openEditForm(game)}
-                      >
-                        <span aria-hidden="true" className="icon-pencil" />
-                      </button>
-                      <button
-                        aria-label={`${game.title} löschen`}
-                        className="icon-action delete-action"
-                        title="Löschen"
-                        type="button"
-                        onClick={() => handleDelete(game)}
-                      >
-                        <span aria-hidden="true" className="icon-cross" />
-                      </button>
-                    </div>
-                  ) : (
-                    <span className="table-note">Nur Eigentümer</span>
-                  )}
+                  <GameActions
+                    game={game}
+                    normalizedUsername={normalizedUsername}
+                    onDelete={handleDelete}
+                    onEdit={openEditForm}
+                  />
                 </td>
               </tr>
             ))}
@@ -645,6 +640,43 @@ function SortButton({ column, sortConfig, onSort }) {
       {column.label}
       <span>{isActive ? (sortConfig.direction === "asc" ? "↑" : "↓") : "↕"}</span>
     </button>
+  );
+}
+
+function GameActions({ game, normalizedUsername, onDelete, onEdit }) {
+  if (!canManageGame(game, normalizedUsername)) {
+    return null;
+  }
+
+  return (
+    <div className="table-actions compact-actions">
+      <a
+        aria-label={`Punktewertung für ${game.title} bearbeiten`}
+        className="icon-action scoring-action"
+        href={`/games/${game.id}/scoring`}
+        title="Punktewertung"
+      >
+        <span aria-hidden="true">Σ</span>
+      </a>
+      <button
+        aria-label={`${game.title} bearbeiten`}
+        className="icon-action edit-action"
+        title="Bearbeiten"
+        type="button"
+        onClick={() => onEdit(game)}
+      >
+        <span aria-hidden="true" className="icon-pencil" />
+      </button>
+      <button
+        aria-label={`${game.title} löschen`}
+        className="icon-action delete-action"
+        title="Löschen"
+        type="button"
+        onClick={() => onDelete(game)}
+      >
+        <span aria-hidden="true" className="icon-cross" />
+      </button>
+    </div>
   );
 }
 

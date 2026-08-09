@@ -100,7 +100,7 @@ export default function AuthCard({ mode }) {
               type="password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              placeholder={isRegister ? "" : "????????"}
+              placeholder=""
             />
           </label>
           {isRegister && (

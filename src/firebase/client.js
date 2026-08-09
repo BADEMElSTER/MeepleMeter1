@@ -11,6 +11,11 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
+export const firebaseAdminEmails = String(import.meta.env.VITE_ADMIN_EMAILS ?? "")
+  .split(",")
+  .map((email) => email.trim().toLowerCase())
+  .filter(Boolean);
+
 export const isFirebaseConfigured = Object.values(firebaseConfig).every(Boolean);
 
 export const firebaseConfigStatus = {

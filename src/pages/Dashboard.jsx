@@ -29,30 +29,30 @@ export default function Dashboard() {
     0,
   );
   const personalMostPlayedGame = getMostPlayedGame(personalPlays, games);
+  const groupMostPlayedGame = getMostPlayedGame(plays, games);
 
   return (
     <section className="page">
       <div className="page-heading">
-        <p className="eyebrow">Dashboard</p>
         <h1>{username ? `Willkommen, ${username}.` : "Deine Brettspielrunde auf einen Blick."}</h1>
         {username && <p className="page-intro">Deine Brettspielrunde auf einen Blick.</p>}
       </div>
 
       <div className="metric-grid">
         <Metric
-          label="Spiele in Sammlung"
-          value={stats.totalGames}
-          detail={`Eigene Spiele: ${ownGames.length}`}
+          label="Eigene Spiele"
+          value={ownGames.length}
+          detail={`Gruppe: ${stats.totalGames} Spiele`}
         />
         <Metric
-          label="Erfasste Partien"
-          value={stats.totalPlays}
-          detail={`Eigene Partien: ${personalPlays.length}`}
+          label="Eigene Partien"
+          value={personalPlays.length}
+          detail={`Gruppe: ${stats.totalPlays} Partien`}
         />
         <Metric
-          label="Gespielte Dauer"
-          value={`${groupTotalDuration} Min.`}
-          detail={`Eigene Dauer: ${personalTotalDuration} Min.`}
+          label="Eigene Dauer"
+          value={`${personalTotalDuration} Min.`}
+          detail={`Gruppe: ${groupTotalDuration} Min.`}
         />
         <Metric
           label="Mein meistgespieltes Spiel"
@@ -66,9 +66,9 @@ export default function Dashboard() {
             )
           }
           detail={
-            personalMostPlayedGame
-              ? `${personalMostPlayedGame.plays} eigene Partien`
-              : "Noch keine eigenen Partien"
+            groupMostPlayedGame
+              ? `Gruppe: ${groupMostPlayedGame.title} (${groupMostPlayedGame.plays})`
+              : "Gruppe: noch keine Partien"
           }
         />
       </div>
