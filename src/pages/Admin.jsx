@@ -9,8 +9,10 @@ const initialResetSelection = {
 };
 
 export default function Admin() {
-  const { games, plays, addGame, resetLocalData } = useAppData();
+  const { games, plays, addGames, dataBackend, importLocalDataToFirestore, resetLocalData } = useAppData();
   const [importMessage, setImportMessage] = useState("");
+  const [migrationMessage, setMigrationMessage] = useState("");
+  const [importPreview, setImportPreview] = useState(null);
   const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
   const [resetSelection, setResetSelection] = useState(initialResetSelection);
 
@@ -22,22 +24,42 @@ export default function Admin() {
     }
 
     try {
-      const text = await file.text();
+      const text = await readImportFileText(file);
       const importedGames = parseGameImport(text, file.name);
-      let addedCount = 0;
+      const previewRows = buildImportPreview(importedGames, games);
+      const importableCount = previewRows.filter((row) => row.status === "ready").length;
 
-      for (const game of importedGames) {
-        if (addGame(game)) {
-          addedCount += 1;
-        }
-      }
-
-      setImportMessage(`${addedCount} von ${importedGames.length} Spielen importiert.`);
+      setImportPreview({
+        fileName: file.name,
+        games: importedGames,
+        rows: previewRows,
+      });
+      setImportMessage(`${importedGames.length} Spiele erkannt. ${importableCount} davon können importiert werden.`);
     } catch (error) {
+      setImportPreview(null);
       setImportMessage(error.message);
     } finally {
       event.target.value = "";
     }
+  }
+
+  function confirmGameImport() {
+    if (!importPreview) {
+      return;
+    }
+
+    const gamesToImport = importPreview.rows
+      .filter((row) => row.status === "ready")
+      .map((row) => importPreview.games[row.index]);
+    const addedCount = addGames(gamesToImport);
+
+    setImportMessage(`${addedCount} von ${importPreview.games.length} Spielen importiert.`);
+    setImportPreview(null);
+  }
+
+  function cancelGameImport() {
+    setImportPreview(null);
+    setImportMessage("");
   }
 
   function exportData(type, rows) {
@@ -73,6 +95,17 @@ export default function Admin() {
     closeResetDialog();
   }
 
+  async function migrateLocalData() {
+    try {
+      const result = await importLocalDataToFirestore();
+      setMigrationMessage(
+        `${result.games} Spiele, ${result.plays} Partien und ${result.playerProfiles} Mitspielerprofile nach Firestore kopiert.`,
+      );
+    } catch (error) {
+      setMigrationMessage(error.message);
+    }
+  }
+
   const hasResetSelection = Object.values(resetSelection).some(Boolean);
 
   return (
@@ -89,6 +122,24 @@ export default function Admin() {
 
       <div className="panel-grid admin-grid">
         <article className="panel">
+          <p className="eyebrow">Datenquelle</p>
+          <h2>{dataBackend === "firestore" ? "Firestore aktiv" : "Lokale Testdaten aktiv"}</h2>
+          <p>
+            Firestore speichert Spiele, Partien und Mitspieler zentral. Der lokale Modus bleibt
+            über <code>VITE_DATA_BACKEND=local</code> für Tests verfügbar.
+          </p>
+          <button
+            className="button button-secondary"
+            disabled={dataBackend !== "firestore"}
+            type="button"
+            onClick={migrateLocalData}
+          >
+            Lokale Daten nach Firestore kopieren
+          </button>
+          {migrationMessage && <p className="form-message">{migrationMessage}</p>}
+        </article>
+
+        <article className="panel">
           <p className="eyebrow">Import</p>
           <h2>Spieleliste hochladen</h2>
           <p>
@@ -100,6 +151,56 @@ export default function Admin() {
             Spieleliste auswählen
           </label>
           {importMessage && <p className="form-message">{importMessage}</p>}
+          {importPreview && (
+            <div className="import-preview">
+              <div className="import-preview-header">
+                <div>
+                  <p className="eyebrow">Vorschau</p>
+                  <h3>{importPreview.fileName}</h3>
+                </div>
+                <div className="admin-actions inline-actions">
+                  <button className="button button-secondary" type="button" onClick={cancelGameImport}>
+                    Abbrechen
+                  </button>
+                  <button className="button" type="button" onClick={confirmGameImport}>
+                    Import bestätigen
+                  </button>
+                </div>
+              </div>
+              <div className="table-scroll">
+                <table className="compact-table">
+                  <thead>
+                    <tr>
+                      <th>Spiel</th>
+                      <th>Kategorie</th>
+                      <th>Jahr</th>
+                      <th>Spieler</th>
+                      <th>Dauer</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {importPreview.rows.map((row) => (
+                      <tr key={`${row.index}-${row.title}`}>
+                        <td>{row.title || "Ohne Titel"}</td>
+                        <td>{row.category || "-"}</td>
+                        <td>{row.catalogYear || "-"}</td>
+                        <td>
+                          {row.minPlayers}-{row.maxPlayers}
+                        </td>
+                        <td>{row.duration ? `${row.duration} Min.` : "-"}</td>
+                        <td>
+                          <span className={`status-pill ${row.status === "ready" ? "status-active" : "status-muted"}`}>
+                            {row.message}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </article>
 
         <article className="panel">
@@ -220,6 +321,36 @@ export default function Admin() {
   );
 }
 
+async function readImportFileText(file) {
+  const buffer = await file.arrayBuffer();
+  const utf8Text = decodeText(buffer, "utf-8");
+  const windowsText = decodeText(buffer, "windows-1252");
+
+  if (!utf8Text) {
+    return windowsText;
+  }
+
+  if (!windowsText) {
+    return utf8Text;
+  }
+
+  return countReplacementCharacters(windowsText) < countReplacementCharacters(utf8Text)
+    ? windowsText
+    : utf8Text;
+}
+
+function decodeText(buffer, encoding) {
+  try {
+    return new TextDecoder(encoding).decode(buffer);
+  } catch {
+    return "";
+  }
+}
+
+function countReplacementCharacters(text) {
+  return (text.match(/\uFFFD/g) ?? []).length;
+}
+
 function parseGameImport(text, fileName) {
   if (fileName.toLowerCase().endsWith(".json")) {
     const parsedData = JSON.parse(text);
@@ -235,6 +366,55 @@ function parseGameImport(text, fileName) {
   return parseCsvGames(text).map(normalizeImportedGame).filter((game) => game.title);
 }
 
+function buildImportPreview(importedGames, existingGames) {
+  const existingTitles = new Set(existingGames.map((game) => normalizeComparableTitle(game.title)));
+  const existingBggIds = new Set(existingGames.map((game) => game.bggId).filter(Boolean));
+  const importTitles = new Set();
+  const importBggIds = new Set();
+
+  return importedGames.map((game, index) => {
+    const normalizedTitle = normalizeComparableTitle(game.title);
+    const hasExistingTitle = existingTitles.has(normalizedTitle);
+    const hasExistingBggId = game.bggId && existingBggIds.has(game.bggId);
+    const hasImportTitle = importTitles.has(normalizedTitle);
+    const hasImportBggId = game.bggId && importBggIds.has(game.bggId);
+    let status = "ready";
+    let message = "Wird importiert";
+
+    if (!normalizedTitle) {
+      status = "skipped";
+      message = "Kein Titel";
+    } else if (hasExistingTitle || hasExistingBggId) {
+      status = "skipped";
+      message = "Bereits vorhanden";
+    } else if (hasImportTitle || hasImportBggId) {
+      status = "skipped";
+      message = "Doppelt in Datei";
+    }
+
+    if (normalizedTitle) {
+      importTitles.add(normalizedTitle);
+    }
+
+    if (game.bggId) {
+      importBggIds.add(game.bggId);
+    }
+
+    return {
+      index,
+      status,
+      message,
+      ...game,
+    };
+  });
+}
+
+function normalizeComparableTitle(title) {
+  return String(title ?? "")
+    .trim()
+    .toLowerCase();
+}
+
 function parseCsvGames(text) {
   const lines = text.split(/\r?\n/).filter((line) => line.trim());
 
@@ -242,19 +422,55 @@ function parseCsvGames(text) {
     return [];
   }
 
-  const headers = splitCsvLine(lines[0]).map((header) => header.trim());
+  const delimiter = detectCsvDelimiter(lines[0]);
+  const headers = splitCsvLine(lines[0], delimiter).map((header) => header.trim().replace(/^\uFEFF/, ""));
 
   return lines.slice(1).map((line) => {
-    const values = splitCsvLine(line);
+    const values = splitCsvLine(line, delimiter);
 
     return Object.fromEntries(headers.map((header, index) => [header, values[index] ?? ""]));
   });
 }
 
-function splitCsvLine(line) {
-  return line
-    .split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/)
-    .map((value) => value.replace(/^"|"$/g, "").replace(/""/g, '"').trim());
+function detectCsvDelimiter(headerLine) {
+  const candidates = [",", ";", "\t"];
+
+  return candidates
+    .map((delimiter) => ({ delimiter, count: splitCsvLine(headerLine, delimiter).length }))
+    .sort((a, b) => b.count - a.count)[0].delimiter;
+}
+
+function splitCsvLine(line, delimiter = ",") {
+  const values = [];
+  let value = "";
+  let isQuoted = false;
+
+  for (let index = 0; index < line.length; index += 1) {
+    const char = line[index];
+    const nextChar = line[index + 1];
+
+    if (char === '"' && isQuoted && nextChar === '"') {
+      value += '"';
+      index += 1;
+      continue;
+    }
+
+    if (char === '"') {
+      isQuoted = !isQuoted;
+      continue;
+    }
+
+    if (char === delimiter && !isQuoted) {
+      values.push(value.trim());
+      value = "";
+      continue;
+    }
+
+    value += char;
+  }
+
+  values.push(value.trim());
+  return values;
 }
 
 function normalizeImportedGame(game) {

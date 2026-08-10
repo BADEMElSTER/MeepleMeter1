@@ -1,8 +1,26 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import {
+  collection,
+  deleteDoc,
+  doc,
+  getDocs,
+  onSnapshot,
+  serverTimestamp,
+  setDoc,
+  writeBatch,
+} from "firebase/firestore";
+import { useAuth } from "../auth/AuthContext.jsx";
+import {
+  dataBackend,
+  firebaseGroupId,
+  firestoreDb,
+  isFirebaseConfigured,
+} from "../firebase/client.js";
 import { games as initialGames, plays as initialPlays } from "./mockData.js";
 
 const AppDataContext = createContext(null);
 const STORAGE_KEY = "meeplemeter-data-v1";
+const useFirestoreBackend = dataBackend === "firestore";
 
 function createId() {
   if (globalThis.crypto?.randomUUID) {
@@ -19,6 +37,40 @@ function loadStoredData() {
   } catch {
     return null;
   }
+}
+
+function cleanForFirestore(value) {
+  if (Array.isArray(value)) {
+    return value.map(cleanForFirestore);
+  }
+
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([, entryValue]) => entryValue !== undefined)
+        .map(([key, entryValue]) => [key, cleanForFirestore(entryValue)]),
+    );
+  }
+
+  return value;
+}
+
+function groupCollectionRef(collectionName) {
+  return collection(firestoreDb, "groups", firebaseGroupId, collectionName);
+}
+
+function groupDocRef(collectionName, documentId) {
+  return doc(firestoreDb, "groups", firebaseGroupId, collectionName, documentId);
+}
+
+function getStoredDefaults() {
+  const storedData = loadStoredData();
+
+  return {
+    games: (storedData?.games ?? initialGames).map(normalizeGame),
+    plays: storedData?.plays ?? initialPlays,
+    playerProfiles: (storedData?.playerProfiles ?? []).map(normalizePlayerProfile),
+  };
 }
 
 function normalizeParticipants(participants = [], scoringMode = "none") {
@@ -182,18 +234,47 @@ function normalizePlayerProfile(profile) {
 }
 
 export function AppDataProvider({ children }) {
-  const storedData = loadStoredData();
-  const [games, setGames] = useState(() =>
-    (storedData?.games ?? initialGames).map(normalizeGame),
-  );
-  const [plays, setPlays] = useState(() => storedData?.plays ?? initialPlays);
-  const [playerProfiles, setPlayerProfiles] = useState(() =>
-    (storedData?.playerProfiles ?? []).map(normalizePlayerProfile),
-  );
+  const { user, userProfile } = useAuth();
+  const shouldUseFirestore =
+    useFirestoreBackend && isFirebaseConfigured && firestoreDb && Boolean(user && userProfile);
+  const [games, setGames] = useState(() => getStoredDefaults().games);
+  const [plays, setPlays] = useState(() => getStoredDefaults().plays);
+  const [playerProfiles, setPlayerProfiles] = useState(() => getStoredDefaults().playerProfiles);
+  const [isDataLoading, setIsDataLoading] = useState(shouldUseFirestore);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ games, plays, playerProfiles }));
-  }, [games, plays, playerProfiles]);
+    if (!shouldUseFirestore) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ games, plays, playerProfiles }));
+    }
+  }, [games, plays, playerProfiles, shouldUseFirestore]);
+
+  useEffect(() => {
+    if (!shouldUseFirestore) {
+      setIsDataLoading(false);
+      return undefined;
+    }
+
+    setIsDataLoading(true);
+
+    const unsubscribers = [
+      onSnapshot(groupCollectionRef("games"), (snapshot) => {
+        setGames(snapshot.docs.map((entry) => normalizeGame({ id: entry.id, ...entry.data() })));
+        setIsDataLoading(false);
+      }),
+      onSnapshot(groupCollectionRef("plays"), (snapshot) => {
+        setPlays(snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() })));
+      }),
+      onSnapshot(groupCollectionRef("playerProfiles"), (snapshot) => {
+        setPlayerProfiles(
+          snapshot.docs.map((entry) => normalizePlayerProfile({ name: entry.id, ...entry.data() })),
+        );
+      }),
+    ];
+
+    return () => {
+      unsubscribers.forEach((unsubscribe) => unsubscribe());
+    };
+  }, [shouldUseFirestore]);
 
   const stats = useMemo(() => {
     const totalDuration = plays.reduce((sum, play) => sum + Number(play.duration), 0);
@@ -258,6 +339,23 @@ export function AppDataProvider({ children }) {
   const sortedPlays = useMemo(() => sortPlaysByGameDate(plays), [plays]);
 
   function addGame(gameInput) {
+    if (shouldUseFirestore) {
+      const alreadyExists = games.some(
+        (game) =>
+          (gameInput.bggId && game.bggId === gameInput.bggId) ||
+          normalizeTitle(game.title) === normalizeTitle(gameInput.title),
+      );
+
+      if (alreadyExists) {
+        return false;
+      }
+
+      const id = createId();
+      const game = { id, ...buildGame(gameInput), createdAt: serverTimestamp() };
+      setDoc(groupDocRef("games", id), cleanForFirestore(game));
+      return true;
+    }
+
     let wasAdded = false;
 
     setGames((currentGames) => {
@@ -278,7 +376,68 @@ export function AppDataProvider({ children }) {
     return wasAdded;
   }
 
+  function addGames(gameInputs) {
+    const existingTitles = new Set(games.map((game) => normalizeTitle(game.title)));
+    const existingBggIds = new Set(games.map((game) => game.bggId).filter(Boolean));
+    const nextGames = [];
+
+    for (const gameInput of gameInputs) {
+      const normalizedTitle = normalizeTitle(gameInput.title);
+      const hasBggDuplicate = gameInput.bggId && existingBggIds.has(gameInput.bggId);
+
+      if (!normalizedTitle || existingTitles.has(normalizedTitle) || hasBggDuplicate) {
+        continue;
+      }
+
+      existingTitles.add(normalizedTitle);
+
+      if (gameInput.bggId) {
+        existingBggIds.add(gameInput.bggId);
+      }
+
+      nextGames.push({ id: createId(), ...buildGame(gameInput) });
+    }
+
+    if (shouldUseFirestore && nextGames.length) {
+      const batch = writeBatch(firestoreDb);
+
+      nextGames.forEach((game) => {
+        batch.set(groupDocRef("games", game.id), cleanForFirestore({ ...game, createdAt: serverTimestamp() }));
+      });
+
+      batch.commit();
+      return nextGames.length;
+    }
+
+    if (nextGames.length) {
+      setGames((currentGames) => [...nextGames, ...currentGames]);
+    }
+
+    return nextGames.length;
+  }
+
   function updateGame(gameId, gameInput) {
+    if (shouldUseFirestore) {
+      const existingGame = games.find((game) => game.id === gameId);
+      const game = buildGame(gameInput, existingGame);
+      setDoc(
+        groupDocRef("games", gameId),
+        cleanForFirestore({ id: gameId, ...game, updatedAt: serverTimestamp() }),
+        { merge: true },
+      );
+
+      plays
+        .filter((play) => play.gameId === gameId)
+        .forEach((play) => {
+          setDoc(
+            groupDocRef("plays", play.id),
+            { game: gameInput.title.trim() || play.game, updatedAt: serverTimestamp() },
+            { merge: true },
+          );
+        });
+      return;
+    }
+
     setGames((currentGames) =>
       currentGames.map((game) => (game.id === gameId ? buildGame(gameInput, game) : game)),
     );
@@ -291,11 +450,31 @@ export function AppDataProvider({ children }) {
   }
 
   function deleteGame(gameId) {
+    if (shouldUseFirestore) {
+      deleteDoc(groupDocRef("games", gameId));
+      plays
+        .filter((play) => play.gameId === gameId)
+        .forEach((play) => deleteDoc(groupDocRef("plays", play.id)));
+      return;
+    }
+
     setGames((currentGames) => currentGames.filter((game) => game.id !== gameId));
     setPlays((currentPlays) => currentPlays.filter((play) => play.gameId !== gameId));
   }
 
   function updateGameScoreCategories(gameId, scoreCategories) {
+    if (shouldUseFirestore) {
+      setDoc(
+        groupDocRef("games", gameId),
+        {
+          scoreCategories: normalizeScoreCategories(scoreCategories),
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
+      return;
+    }
+
     setGames((currentGames) =>
       currentGames.map((game) =>
         game.id === gameId
@@ -311,10 +490,29 @@ export function AppDataProvider({ children }) {
       ...buildPlay(playInput, games),
     };
 
+    if (shouldUseFirestore) {
+      setDoc(groupDocRef("plays", play.id), cleanForFirestore({ ...play, createdAt: serverTimestamp() }));
+      return;
+    }
+
     setPlays((currentPlays) => [play, ...currentPlays]);
   }
 
   function updatePlay(playId, playInput) {
+    if (shouldUseFirestore) {
+      const existingPlay = plays.find((play) => play.id === playId);
+      setDoc(
+        groupDocRef("plays", playId),
+        cleanForFirestore({
+          id: playId,
+          ...buildPlay(playInput, games, existingPlay),
+          updatedAt: serverTimestamp(),
+        }),
+        { merge: true },
+      );
+      return;
+    }
+
     setPlays((currentPlays) =>
       currentPlays.map((play) =>
         play.id === playId ? buildPlay(playInput, games, play) : play,
@@ -323,6 +521,11 @@ export function AppDataProvider({ children }) {
   }
 
   function deletePlay(playId) {
+    if (shouldUseFirestore) {
+      deleteDoc(groupDocRef("plays", playId));
+      return;
+    }
+
     setPlays((currentPlays) => currentPlays.filter((play) => play.id !== playId));
   }
 
@@ -331,6 +534,15 @@ export function AppDataProvider({ children }) {
       ...profileInput,
       name: playerName,
     });
+
+    if (shouldUseFirestore) {
+      setDoc(
+        groupDocRef("playerProfiles", normalizedProfile.name),
+        cleanForFirestore({ ...normalizedProfile, updatedAt: serverTimestamp() }),
+        { merge: true },
+      );
+      return;
+    }
 
     setPlayerProfiles((currentProfiles) => {
       const existingProfile = currentProfiles.find(
@@ -353,6 +565,31 @@ export function AppDataProvider({ children }) {
     const normalizedPlayerName = playerName.trim().toLowerCase();
 
     if (!normalizedPlayerName) {
+      return;
+    }
+
+    if (shouldUseFirestore) {
+      const existingProfile = playerProfiles.find(
+        (profile) => profile.name.toLowerCase() === normalizedPlayerName,
+      );
+      const deletedProfile = existingProfile
+        ? { ...existingProfile, isDeleted: true, accountStatus: "deleted" }
+        : {
+            name: playerName.trim(),
+            favoriteGame: "",
+            favoriteColor: "",
+            accountEmail: "",
+            accountUsername: "",
+            accountStatus: "deleted",
+            isDeleted: true,
+            notes: "",
+          };
+
+      setDoc(
+        groupDocRef("playerProfiles", deletedProfile.name),
+        cleanForFirestore({ ...deletedProfile, updatedAt: serverTimestamp() }),
+        { merge: true },
+      );
       return;
     }
 
@@ -393,6 +630,46 @@ export function AppDataProvider({ children }) {
       return;
     }
 
+    if (shouldUseFirestore) {
+      plays.forEach((play) => {
+        const nextPlay = {
+          ...play,
+          winner: play.winner?.trim().toLowerCase() === normalizedOldName ? trimmedNewName : play.winner,
+          participants: (play.participants ?? []).map((participant) =>
+            participant.name?.trim().toLowerCase() === normalizedOldName
+              ? { ...participant, name: trimmedNewName }
+              : participant,
+          ),
+        };
+
+        if (JSON.stringify(nextPlay) !== JSON.stringify(play)) {
+          setDoc(
+            groupDocRef("plays", play.id),
+            cleanForFirestore({ ...nextPlay, updatedAt: serverTimestamp() }),
+            { merge: true },
+          );
+        }
+      });
+
+      const profile = playerProfiles.find(
+        (entry) => entry.name?.trim().toLowerCase() === normalizedOldName,
+      );
+
+      if (profile) {
+        deleteDoc(groupDocRef("playerProfiles", profile.name));
+        setDoc(
+          groupDocRef("playerProfiles", trimmedNewName),
+          cleanForFirestore({
+            ...profile,
+            name: trimmedNewName,
+            accountUsername: trimmedNewName,
+            updatedAt: serverTimestamp(),
+          }),
+        );
+      }
+      return;
+    }
+
     setPlays((currentPlays) =>
       currentPlays.map((play) => ({
         ...play,
@@ -415,6 +692,11 @@ export function AppDataProvider({ children }) {
   }
 
   function resetLocalData(options) {
+    if (shouldUseFirestore) {
+      resetFirestoreData(options);
+      return;
+    }
+
     if (options.resetGames) {
       setGames([]);
     }
@@ -428,13 +710,84 @@ export function AppDataProvider({ children }) {
     }
   }
 
+  async function resetFirestoreData(options) {
+    const collectionsToReset = [
+      options.resetGames ? "games" : null,
+      options.resetPlays ? "plays" : null,
+      options.resetPlayers ? "playerProfiles" : null,
+    ].filter(Boolean);
+
+    for (const collectionName of collectionsToReset) {
+      const snapshot = await getDocs(groupCollectionRef(collectionName));
+      const batch = writeBatch(firestoreDb);
+
+      snapshot.docs.forEach((entry) => {
+        batch.delete(entry.ref);
+      });
+
+      await batch.commit();
+    }
+  }
+
+  async function importLocalDataToFirestore() {
+    if (!shouldUseFirestore) {
+      return { games: 0, plays: 0, playerProfiles: 0 };
+    }
+
+    const localData = loadStoredData();
+
+    if (!localData) {
+      return { games: 0, plays: 0, playerProfiles: 0 };
+    }
+
+    const batch = writeBatch(firestoreDb);
+    const localGames = (localData.games ?? []).map(normalizeGame);
+    const localPlays = localData.plays ?? [];
+    const localPlayerProfiles = (localData.playerProfiles ?? []).map(normalizePlayerProfile);
+
+    localGames.forEach((game) => {
+      const id = game.id || createId();
+      batch.set(groupDocRef("games", id), cleanForFirestore({ ...game, id, importedAt: serverTimestamp() }), {
+        merge: true,
+      });
+    });
+
+    localPlays.forEach((play) => {
+      const id = play.id || createId();
+      batch.set(groupDocRef("plays", id), cleanForFirestore({ ...play, id, importedAt: serverTimestamp() }), {
+        merge: true,
+      });
+    });
+
+    localPlayerProfiles.forEach((profile) => {
+      if (profile.name) {
+        batch.set(
+          groupDocRef("playerProfiles", profile.name),
+          cleanForFirestore({ ...profile, importedAt: serverTimestamp() }),
+          { merge: true },
+        );
+      }
+    });
+
+    await batch.commit();
+
+    return {
+      games: localGames.length,
+      plays: localPlays.length,
+      playerProfiles: localPlayerProfiles.length,
+    };
+  }
+
   const value = useMemo(
     () => ({
       games,
       plays: sortedPlays,
       playerProfiles,
       stats,
+      dataBackend: shouldUseFirestore ? "firestore" : "local",
+      isDataLoading,
       addGame,
+      addGames,
       updateGame,
       updateGameScoreCategories,
       deleteGame,
@@ -445,8 +798,9 @@ export function AppDataProvider({ children }) {
       deletePlayer,
       renamePlayer,
       resetLocalData,
+      importLocalDataToFirestore,
     }),
-    [games, sortedPlays, playerProfiles, stats],
+    [games, sortedPlays, playerProfiles, stats, shouldUseFirestore, isDataLoading],
   );
 
   return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>;

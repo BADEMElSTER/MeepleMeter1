@@ -10,6 +10,7 @@ import {
 import { doc, getDoc, runTransaction, serverTimestamp, setDoc } from "firebase/firestore";
 import {
   firebaseAdminEmails,
+  firebaseGroupId,
   firebaseAuth,
   firestoreDb,
   isFirebaseConfigured,
@@ -67,6 +68,7 @@ export function AuthProvider({ children }) {
           await setDoc(profileRef, { role: resolvedRole, updatedAt: serverTimestamp() }, { merge: true });
         }
 
+        await ensureDefaultGroupMember(currentUser, { ...profile, role: resolvedRole });
         setUserProfile({ ...profile, role: resolvedRole });
       } else {
         const profile = {
@@ -78,6 +80,7 @@ export function AuthProvider({ children }) {
           createdAt: serverTimestamp(),
         };
         await setDoc(profileRef, profile);
+        await ensureDefaultGroupMember(currentUser, profile);
         setUserProfile(profile);
       }
 
@@ -259,6 +262,21 @@ export function AuthProvider({ children }) {
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+async function ensureDefaultGroupMember(currentUser, profile) {
+  const role = getRoleForEmail(currentUser.email, profile.role ?? roles.member);
+
+  await setDoc(
+    doc(firestoreDb, "groups", firebaseGroupId, "members", currentUser.uid),
+    {
+      email: currentUser.email ?? profile.email ?? "",
+      role,
+      username: profile.username || profile.displayName || "",
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true },
+  );
 }
 
 export function useAuth() {

@@ -17,6 +17,8 @@ export const firebaseAdminEmails = String(import.meta.env.VITE_ADMIN_EMAILS ?? "
   .filter(Boolean);
 
 export const isFirebaseConfigured = Object.values(firebaseConfig).every(Boolean);
+export const firebaseGroupId = import.meta.env.VITE_FIREBASE_GROUP_ID || "default";
+export const dataBackend = import.meta.env.VITE_DATA_BACKEND || "firestore";
 
 export const firebaseConfigStatus = {
   apiKeyPrefix: firebaseConfig.apiKey ? firebaseConfig.apiKey.slice(0, 12) : "",

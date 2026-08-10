@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+﻿import { useRef, useState } from "react";
 import Field from "../components/Field.jsx";
 import GameLink from "../components/GameLink.jsx";
 import { useAuth } from "../auth/AuthContext.jsx";
@@ -104,6 +104,8 @@ export default function Games() {
   const categorySelectValue = commonCategories.includes(form.category)
     ? form.category
     : customCategoryValue;
+  const editingGame = editingGameId ? games.find((game) => game.id === editingGameId) : null;
+  const isEditingUnassignedGame = Boolean(editingGame && !getGameOwner(editingGame));
 
   function updateField(field, value) {
     setForm((currentForm) => ({ ...currentForm, [field]: value }));
@@ -128,8 +130,8 @@ export default function Games() {
   }
 
   function openEditForm(game) {
-    if (!canManageGame(game, normalizedUsername)) {
-      setFormMessage("Du kannst nur eigene Spiele bearbeiten.");
+    if (!canEditGame(game, normalizedUsername)) {
+      setFormMessage("Du kannst nur eigene oder nicht zugeordnete Spiele bearbeiten.");
       return;
     }
 
@@ -239,7 +241,7 @@ export default function Games() {
       return;
     }
 
-    if (!form.owner.trim()) {
+    if (!form.owner.trim() && !isEditingUnassignedGame) {
       setFormMessage("Bitte trage einen Eigentümer ein.");
       return;
     }
@@ -264,7 +266,7 @@ export default function Games() {
   }
 
   function handleDelete(game) {
-    if (!canManageGame(game, normalizedUsername)) {
+    if (!canDeleteGame(game, normalizedUsername)) {
       setFormMessage("Du kannst nur eigene Spiele löschen.");
       return;
     }
@@ -344,7 +346,7 @@ export default function Games() {
                           <div>
                             <strong>{entry.name}</strong>
                             <span>
-                              {entry.year ?? "o. J."} · {entry.minPlayers}–{entry.maxPlayers} Spieler ·{" "}
+                              {entry.year ?? "o. J."} · {entry.minPlayers}-{entry.maxPlayers} Spieler ·{" "}
                               {entry.playingTime}
                               {entry.isOwned ? " · bereits in Sammlung" : ""}
                             </span>
@@ -381,11 +383,11 @@ export default function Games() {
             </Field>
             <Field label="Eigentümer">
               <input
-                required
-                readOnly
+                required={!isEditingUnassignedGame}
+                readOnly={!isEditingUnassignedGame}
                 value={form.owner}
                 onChange={(event) => updateField("owner", event.target.value)}
-                placeholder="Benutzername"
+                placeholder={isEditingUnassignedGame ? "Leer lassen oder deinen Benutzernamen eintragen" : "Benutzername"}
               />
             </Field>
             <Field label="Kategorie">
@@ -590,7 +592,7 @@ export default function Games() {
                     </div>
                     <div className="mobile-game-summary-meta">
                       <span>{game.category}</span>
-                      <span>{game.catalogYear ?? "–"}</span>
+                      <span>{game.catalogYear ?? "-"}</span>
                       <span>{game.minPlayers}-{game.maxPlayers} Spieler</span>
                       <span>{game.duration} Min.</span>
                       <span>{game.plays} Partien</span>
@@ -599,16 +601,16 @@ export default function Games() {
                 </td>
                 <td>{game.category}</td>
                 <td>{game.owner || "Nicht zugeordnet"}</td>
-                <td>{game.catalogYear ?? "–"}</td>
+                <td>{game.catalogYear ?? "-"}</td>
                 <td>{game.minPlayers}</td>
                 <td>{game.maxPlayers}</td>
                 <td>
                   <div className="time-cell">
                     <span>{game.duration} Min. geplant</span>
-                    <span>{game.averagePlayedDuration ? `${game.averagePlayedDuration} Min. Ø echt` : "– Ø echt"}</span>
+                    <span>{game.averagePlayedDuration ? `${game.averagePlayedDuration} Min. Ø echt` : "- Ø echt"}</span>
                   </div>
                 </td>
-                <td>{game.expansions?.length ? game.expansions.length : "–"}</td>
+                <td>{game.expansions?.length ? game.expansions.length : "-"}</td>
                 <td>{game.plays}</td>
                 <td>
                   <GameActions
@@ -644,38 +646,47 @@ function SortButton({ column, sortConfig, onSort }) {
 }
 
 function GameActions({ game, normalizedUsername, onDelete, onEdit }) {
-  if (!canManageGame(game, normalizedUsername)) {
+  const canEdit = canEditGame(game, normalizedUsername);
+  const canDelete = canDeleteGame(game, normalizedUsername);
+
+  if (!canEdit && !canDelete) {
     return null;
   }
 
   return (
     <div className="table-actions compact-actions">
-      <a
-        aria-label={`Punktewertung für ${game.title} bearbeiten`}
-        className="icon-action scoring-action"
-        href={`/games/${game.id}/scoring`}
-        title="Punktewertung"
-      >
-        <span aria-hidden="true">Σ</span>
-      </a>
-      <button
-        aria-label={`${game.title} bearbeiten`}
-        className="icon-action edit-action"
-        title="Bearbeiten"
-        type="button"
-        onClick={() => onEdit(game)}
-      >
-        <span aria-hidden="true" className="icon-pencil" />
-      </button>
-      <button
-        aria-label={`${game.title} löschen`}
-        className="icon-action delete-action"
-        title="Löschen"
-        type="button"
-        onClick={() => onDelete(game)}
-      >
-        <span aria-hidden="true" className="icon-cross" />
-      </button>
+      {canEdit && (
+        <>
+          <a
+            aria-label={`Punktewertung für ${game.title} bearbeiten`}
+            className="icon-action scoring-action"
+            href={`/games/${game.id}/scoring`}
+            title="Punktewertung"
+          >
+            <span aria-hidden="true">S</span>
+          </a>
+          <button
+            aria-label={`${game.title} bearbeiten`}
+            className="icon-action edit-action"
+            title="Bearbeiten"
+            type="button"
+            onClick={() => onEdit(game)}
+          >
+            <span aria-hidden="true" className="icon-pencil" />
+          </button>
+        </>
+      )}
+      {canDelete && (
+        <button
+          aria-label={`${game.title} löschen`}
+          className="icon-action delete-action"
+          title="Löschen"
+          type="button"
+          onClick={() => onDelete(game)}
+        >
+          <span aria-hidden="true" className="icon-cross" />
+        </button>
+      )}
     </div>
   );
 }
@@ -696,12 +707,25 @@ function sortGames(games, sortConfig) {
   });
 }
 
-function canManageGame(game, normalizedUsername) {
+function getGameOwner(game) {
+  return game?.ownerNormalized || game?.owner?.trim().toLowerCase() || "";
+}
+
+function canEditGame(game, normalizedUsername) {
   if (!normalizedUsername) {
     return false;
   }
 
-  const owner = game.ownerNormalized || game.owner?.trim().toLowerCase() || "";
+  const owner = getGameOwner(game);
+  return !owner || owner === normalizedUsername;
+}
+
+function canDeleteGame(game, normalizedUsername) {
+  if (!normalizedUsername) {
+    return false;
+  }
+
+  const owner = getGameOwner(game);
   return owner === normalizedUsername;
 }
 

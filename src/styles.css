@@ -1384,6 +1384,66 @@ th {
   color: #b42318;
 }
 
+.status-active {
+  background: #e8f7ed;
+  color: #197a3a;
+}
+
+.status-muted {
+  background: #f1ece6;
+  color: var(--muted);
+}
+
+.import-preview {
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--border);
+}
+
+.import-preview-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.import-preview-header h3 {
+  margin: 0.15rem 0 0;
+  font-size: 1.25rem;
+}
+
+.inline-actions {
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+.compact-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 680px;
+}
+
+.compact-table th,
+.compact-table td {
+  padding: 0.8rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.compact-table th {
+  color: var(--muted);
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .deleted-player-link,
 .deleted-player-label {
   color: #8b8178;

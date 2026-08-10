@@ -38,7 +38,9 @@ service cloud.firestore {
 
       match /members/{userId} {
         allow read: if isGroupMember(groupId);
-        allow create, update, delete: if isGroupAdmin(groupId);
+        allow create: if signedIn() && request.auth.uid == userId;
+        allow update: if isGroupAdmin(groupId) || (signedIn() && request.auth.uid == userId);
+        allow delete: if isGroupAdmin(groupId);
       }
 
       match /games/{gameId} {
@@ -48,6 +50,12 @@ service cloud.firestore {
       }
 
       match /plays/{playId} {
+        allow read: if isGroupMember(groupId);
+        allow create, update: if isGroupMember(groupId);
+        allow delete: if isGroupAdmin(groupId);
+      }
+
+      match /playerProfiles/{playerId} {
         allow read: if isGroupMember(groupId);
         allow create, update: if isGroupMember(groupId);
         allow delete: if isGroupAdmin(groupId);
