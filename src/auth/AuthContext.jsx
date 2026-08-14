@@ -7,7 +7,17 @@ import {
   signOut,
   updatePassword,
 } from "firebase/auth";
-import { doc, getDoc, runTransaction, serverTimestamp, setDoc } from "firebase/firestore";
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  query,
+  runTransaction,
+  serverTimestamp,
+  setDoc,
+  where,
+} from "firebase/firestore";
 import {
   firebaseAdminEmails,
   firebaseGroupId,
@@ -48,8 +58,29 @@ export function AuthProvider({ children }) {
       const profileSnapshot = await getDoc(profileRef);
 
       if (profileSnapshot.exists()) {
-        const profile = profileSnapshot.data();
+        let profile = profileSnapshot.data();
         const resolvedRole = getRoleForEmail(currentUser.email, profile.role ?? roles.member);
+        const recoveredUsername = await recoverUsername(currentUser, profile);
+
+        if (recoveredUsername && !profile.username?.trim()) {
+          profile = {
+            ...profile,
+            displayName: recoveredUsername.username,
+            username: recoveredUsername.username,
+            usernameNormalized: recoveredUsername.usernameNormalized,
+          };
+
+          await setDoc(
+            profileRef,
+            {
+              displayName: recoveredUsername.username,
+              username: recoveredUsername.username,
+              usernameNormalized: recoveredUsername.usernameNormalized,
+              updatedAt: serverTimestamp(),
+            },
+            { merge: true },
+          );
+        }
 
         if (profile.usernameNormalized && currentUser.email) {
           await setDoc(
@@ -71,11 +102,12 @@ export function AuthProvider({ children }) {
         await ensureDefaultGroupMember(currentUser, { ...profile, role: resolvedRole });
         setUserProfile({ ...profile, role: resolvedRole });
       } else {
+        const recoveredUsername = await recoverUsername(currentUser);
         const profile = {
           email: currentUser.email,
-          displayName: "",
-          username: "",
-          usernameNormalized: "",
+          displayName: recoveredUsername?.username ?? "",
+          username: recoveredUsername?.username ?? "",
+          usernameNormalized: recoveredUsername?.usernameNormalized ?? "",
           role: getRoleForEmail(currentUser.email),
           createdAt: serverTimestamp(),
         };
@@ -266,17 +298,68 @@ export function AuthProvider({ children }) {
 
 async function ensureDefaultGroupMember(currentUser, profile) {
   const role = getRoleForEmail(currentUser.email, profile.role ?? roles.member);
+  const username = (profile.username || profile.displayName || "").trim();
+  const memberData = {
+    email: currentUser.email ?? profile.email ?? "",
+    role,
+    updatedAt: serverTimestamp(),
+  };
+
+  if (username) {
+    memberData.username = username;
+  }
 
   await setDoc(
     doc(firestoreDb, "groups", firebaseGroupId, "members", currentUser.uid),
-    {
-      email: currentUser.email ?? profile.email ?? "",
-      role,
-      username: profile.username || profile.displayName || "",
-      updatedAt: serverTimestamp(),
-    },
+    memberData,
     { merge: true },
   );
+}
+
+async function recoverUsername(currentUser, profile = {}) {
+  const existingUsername = (profile.username || profile.displayName || "").trim();
+
+  if (existingUsername) {
+    return {
+      username: existingUsername,
+      usernameNormalized: profile.usernameNormalized || existingUsername.toLowerCase(),
+    };
+  }
+
+  const usernameFromIndex = await findUsernameByUid(currentUser.uid);
+
+  if (usernameFromIndex) {
+    return usernameFromIndex;
+  }
+
+  const memberSnapshot = await getDoc(
+    doc(firestoreDb, "groups", firebaseGroupId, "members", currentUser.uid),
+  );
+  const memberUsername = memberSnapshot.data()?.username?.trim();
+
+  if (memberUsername) {
+    return {
+      username: memberUsername,
+      usernameNormalized: memberUsername.toLowerCase(),
+    };
+  }
+
+  return null;
+}
+
+async function findUsernameByUid(uid) {
+  const usernameQuery = query(collection(firestoreDb, "usernames"), where("uid", "==", uid));
+  const usernameSnapshot = await getDocs(usernameQuery);
+  const usernameDocument = usernameSnapshot.docs[0];
+
+  if (!usernameDocument) {
+    return null;
+  }
+
+  return {
+    username: usernameDocument.data().username || usernameDocument.id,
+    usernameNormalized: usernameDocument.id,
+  };
 }
 
 export function useAuth() {
