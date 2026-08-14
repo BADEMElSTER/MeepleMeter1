@@ -5,24 +5,23 @@ import { useAuth } from "../auth/AuthContext.jsx";
 import { useAppData } from "../data/AppDataContext.jsx";
 
 export default function Dashboard() {
-  const { userProfile } = useAuth();
-  const { games, plays, stats } = useAppData();
-  const username = userProfile?.username || userProfile?.displayName;
-  const normalizedUsername = username?.trim().toLowerCase() ?? "";
+  const { user, userProfile } = useAuth();
+  const { games, plays, playerProfiles, stats } = useAppData();
+  const username = getCurrentPlayerName(user, userProfile, playerProfiles);
+  const normalizedUsername = normalizeName(username);
   const personalPlays = normalizedUsername
     ? plays.filter((play) =>
         play.participants?.some(
-          (participant) => participant.name.trim().toLowerCase() === normalizedUsername,
+          (participant) => normalizeName(participant.name) === normalizedUsername,
         ),
       )
-    : plays;
+    : [];
   const ownGames = normalizedUsername
     ? games.filter(
         (game) =>
-          (game.ownerNormalized || game.owner?.trim().toLowerCase() || "") ===
-          normalizedUsername,
+          normalizeName(game.ownerNormalized || game.owner) === normalizedUsername,
       )
-    : games;
+    : [];
   const groupTotalDuration = plays.reduce((sum, play) => sum + Number(play.duration || 0), 0);
   const personalTotalDuration = personalPlays.reduce(
     (sum, play) => sum + Number(play.duration || 0),
@@ -143,6 +142,33 @@ export default function Dashboard() {
       </div>
     </section>
   );
+}
+
+function getCurrentPlayerName(user, userProfile, playerProfiles) {
+  const profileName = userProfile?.username || userProfile?.displayName;
+
+  if (profileName?.trim()) {
+    return profileName.trim();
+  }
+
+  const userEmail = user?.email?.trim().toLowerCase();
+
+  if (!userEmail) {
+    return "";
+  }
+
+  const matchingPlayerProfile = playerProfiles.find((profile) => {
+    const profileEmail = profile.accountEmail?.trim().toLowerCase();
+    const profileUsername = profile.accountUsername?.trim().toLowerCase();
+
+    return profileEmail === userEmail || profileUsername === userEmail;
+  });
+
+  return matchingPlayerProfile?.name ?? "";
+}
+
+function normalizeName(name) {
+  return String(name ?? "").trim().toLowerCase();
 }
 
 function Metric({ detail, label, value }) {

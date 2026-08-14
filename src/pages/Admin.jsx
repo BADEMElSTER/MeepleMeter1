@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useAppData } from "../data/AppDataContext.jsx";
 
@@ -9,10 +9,11 @@ const initialResetSelection = {
 };
 
 export default function Admin() {
-  const { games, plays, addGames, dataBackend, importLocalDataToFirestore, resetLocalData } = useAppData();
+  const { games, plays, addGames, addPlays, resetLocalData } = useAppData();
   const [importMessage, setImportMessage] = useState("");
-  const [migrationMessage, setMigrationMessage] = useState("");
   const [importPreview, setImportPreview] = useState(null);
+  const [playImportMessage, setPlayImportMessage] = useState("");
+  const [playImportPreview, setPlayImportPreview] = useState(null);
   const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
   const [resetSelection, setResetSelection] = useState(initialResetSelection);
 
@@ -62,6 +63,54 @@ export default function Admin() {
     setImportMessage("");
   }
 
+  async function handlePlayImport(event) {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    try {
+      const text = await readImportFileText(file);
+      const importedPlays = parsePlayImport(text, file.name, games);
+      const previewRows = buildPlayImportPreview(importedPlays, games);
+      const importableCount = previewRows.filter((row) => row.status === "ready").length;
+
+      setPlayImportPreview({
+        fileName: file.name,
+        plays: importedPlays,
+        rows: previewRows,
+      });
+      setPlayImportMessage(
+        `${importedPlays.length} Partien erkannt. ${importableCount} davon können importiert werden.`,
+      );
+    } catch (error) {
+      setPlayImportPreview(null);
+      setPlayImportMessage(error.message);
+    } finally {
+      event.target.value = "";
+    }
+  }
+
+  function confirmPlayImport() {
+    if (!playImportPreview) {
+      return;
+    }
+
+    const playsToImport = playImportPreview.rows
+      .filter((row) => row.status === "ready")
+      .map((row) => playImportPreview.plays[row.index]);
+    const addedCount = addPlays(playsToImport);
+
+    setPlayImportMessage(`${addedCount} von ${playImportPreview.plays.length} Partien importiert.`);
+    setPlayImportPreview(null);
+  }
+
+  function cancelPlayImport() {
+    setPlayImportPreview(null);
+    setPlayImportMessage("");
+  }
+
   function exportData(type, rows) {
     const content = JSON.stringify(rows, null, 2);
     const blob = new Blob([content], { type: "application/json" });
@@ -95,17 +144,6 @@ export default function Admin() {
     closeResetDialog();
   }
 
-  async function migrateLocalData() {
-    try {
-      const result = await importLocalDataToFirestore();
-      setMigrationMessage(
-        `${result.games} Spiele, ${result.plays} Partien und ${result.playerProfiles} Mitspielerprofile nach Firestore kopiert.`,
-      );
-    } catch (error) {
-      setMigrationMessage(error.message);
-    }
-  }
-
   const hasResetSelection = Object.values(resetSelection).some(Boolean);
 
   return (
@@ -121,24 +159,6 @@ export default function Admin() {
       </div>
 
       <div className="panel-grid admin-grid">
-        <article className="panel">
-          <p className="eyebrow">Datenquelle</p>
-          <h2>{dataBackend === "firestore" ? "Firestore aktiv" : "Lokale Testdaten aktiv"}</h2>
-          <p>
-            Firestore speichert Spiele, Partien und Mitspieler zentral. Der lokale Modus bleibt
-            über <code>VITE_DATA_BACKEND=local</code> für Tests verfügbar.
-          </p>
-          <button
-            className="button button-secondary"
-            disabled={dataBackend !== "firestore"}
-            type="button"
-            onClick={migrateLocalData}
-          >
-            Lokale Daten nach Firestore kopieren
-          </button>
-          {migrationMessage && <p className="form-message">{migrationMessage}</p>}
-        </article>
-
         <article className="panel">
           <p className="eyebrow">Import</p>
           <h2>Spieleliste hochladen</h2>
@@ -188,6 +208,68 @@ export default function Admin() {
                         <td>
                           {row.minPlayers}-{row.maxPlayers}
                         </td>
+                        <td>{row.duration ? `${row.duration} Min.` : "-"}</td>
+                        <td>
+                          <span className={`status-pill ${row.status === "ready" ? "status-active" : "status-muted"}`}>
+                            {row.message}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </article>
+
+        <article className="panel">
+          <p className="eyebrow">Import</p>
+          <h2>Gespielte Partien hochladen</h2>
+          <p>
+            Unterstützt JSON-Listen oder CSV mit Spalten wie game/title, date, duration,
+            scoringMode, participants und winner.
+          </p>
+          <label className="file-upload">
+            <input accept=".json,.csv,text/csv,application/json" type="file" onChange={handlePlayImport} />
+            Partienliste auswählen
+          </label>
+          {playImportMessage && <p className="form-message">{playImportMessage}</p>}
+          {playImportPreview && (
+            <div className="import-preview">
+              <div className="import-preview-header">
+                <div>
+                  <p className="eyebrow">Vorschau</p>
+                  <h3>{playImportPreview.fileName}</h3>
+                </div>
+                <div className="admin-actions inline-actions">
+                  <button className="button button-secondary" type="button" onClick={cancelPlayImport}>
+                    Abbrechen
+                  </button>
+                  <button className="button" type="button" onClick={confirmPlayImport}>
+                    Import bestätigen
+                  </button>
+                </div>
+              </div>
+              <div className="table-scroll">
+                <table className="compact-table">
+                  <thead>
+                    <tr>
+                      <th>Datum</th>
+                      <th>Spiel</th>
+                      <th>Mitspieler</th>
+                      <th>Gewinner</th>
+                      <th>Dauer</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {playImportPreview.rows.map((row) => (
+                      <tr key={`${row.index}-${row.game}-${row.date}`}>
+                        <td>{row.date || "-"}</td>
+                        <td>{row.game || "Unbekannt"}</td>
+                        <td>{row.participantCount}</td>
+                        <td>{row.winner || "-"}</td>
                         <td>{row.duration ? `${row.duration} Min.` : "-"}</td>
                         <td>
                           <span className={`status-pill ${row.status === "ready" ? "status-active" : "status-muted"}`}>
@@ -407,6 +489,150 @@ function buildImportPreview(importedGames, existingGames) {
       ...game,
     };
   });
+}
+
+function parsePlayImport(text, fileName, games) {
+  const rows = fileName.toLowerCase().endsWith(".json")
+    ? parseJsonRows(text, "plays")
+    : parseCsvGames(text);
+
+  return rows.map((row) => normalizeImportedPlay(row, games));
+}
+
+function parseJsonRows(text, listKey) {
+  const parsedData = JSON.parse(text);
+  const rows = Array.isArray(parsedData) ? parsedData : parsedData[listKey];
+
+  if (!Array.isArray(rows)) {
+    throw new Error(`JSON muss eine Liste oder ein Objekt mit ${listKey}-Liste enthalten.`);
+  }
+
+  return rows;
+}
+
+function buildPlayImportPreview(importedPlays, games) {
+  return importedPlays.map((play, index) => {
+    const gameExists = games.some((game) => game.id === play.gameId);
+    const hasParticipants = play.participants.length > 0;
+    const hasDate = Boolean(play.date);
+    let status = "ready";
+    let message = "Wird importiert";
+
+    if (!gameExists) {
+      status = "skipped";
+      message = "Spiel nicht gefunden";
+    } else if (!hasDate) {
+      status = "skipped";
+      message = "Datum fehlt";
+    } else if (!hasParticipants) {
+      status = "skipped";
+      message = "Keine Mitspieler";
+    }
+
+    return {
+      index,
+      status,
+      message,
+      game: play.game,
+      date: play.date,
+      winner: play.winner,
+      duration: play.duration,
+      participantCount: play.participants.length,
+    };
+  });
+}
+
+function normalizeImportedPlay(row, games) {
+  const gameName = row.game ?? row.title ?? row.name ?? row.spiel ?? "";
+  const selectedGame = findGameByTitle(games, gameName);
+  const scoringMode = normalizeScoringMode(row.scoringMode ?? row.scoring_mode ?? row.wertung);
+  const participants = parseImportedParticipants(row, scoringMode);
+
+  return {
+    gameId: selectedGame?.id ?? "",
+    game: selectedGame?.title ?? gameName,
+    date: normalizeImportDate(row.date ?? row.datum),
+    duration: row.duration ?? row.dauer ?? row.playTime ?? row.play_time ?? selectedGame?.duration ?? 0,
+    scoringMode,
+    participants,
+    winner: row.winner ?? row.gewinner ?? "",
+    note: row.note ?? row.notiz ?? "",
+    useDetailedScoring: false,
+  };
+}
+
+function findGameByTitle(games, title) {
+  const normalizedTitle = normalizeComparableTitle(title);
+  return games.find((game) => normalizeComparableTitle(game.title) === normalizedTitle);
+}
+
+function normalizeScoringMode(value) {
+  const normalizedValue = String(value ?? "").trim().toLowerCase();
+
+  if (["low", "lowest", "niedrig", "niedrigste punktzahl gewinnt"].includes(normalizedValue)) {
+    return "low";
+  }
+
+  if (["none", "keine", "keine punkte"].includes(normalizedValue)) {
+    return "none";
+  }
+
+  return "high";
+}
+
+function normalizeImportDate(value) {
+  const rawValue = String(value ?? "").trim();
+
+  if (!rawValue) {
+    return "";
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(rawValue)) {
+    return rawValue;
+  }
+
+  const germanDateMatch = rawValue.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+
+  if (germanDateMatch) {
+    const [, day, month, year] = germanDateMatch;
+    return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+  }
+
+  const parsedDate = new Date(rawValue);
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    return "";
+  }
+
+  return parsedDate.toISOString().slice(0, 10);
+}
+
+function parseImportedParticipants(row, scoringMode) {
+  if (Array.isArray(row.participants)) {
+    return row.participants
+      .map((participant) => ({
+        name: participant.name?.trim() ?? "",
+        score: scoringMode === "none" ? "" : participant.score ?? "",
+      }))
+      .filter((participant) => participant.name);
+  }
+
+  const participantText = row.participants ?? row.mitspieler ?? "";
+
+  return String(participantText)
+    .split(/\||,/)
+    .map((entry) => parseParticipantEntry(entry, scoringMode))
+    .filter((participant) => participant.name);
+}
+
+function parseParticipantEntry(entry, scoringMode) {
+  const trimmedEntry = entry.trim();
+  const [namePart, scorePart] = trimmedEntry.split(/:|=/);
+
+  return {
+    name: namePart?.trim() ?? "",
+    score: scoringMode === "none" ? "" : scorePart?.trim() ?? "",
+  };
 }
 
 function normalizeComparableTitle(title) {

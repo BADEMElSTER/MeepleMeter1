@@ -498,6 +498,27 @@ export function AppDataProvider({ children }) {
     setPlays((currentPlays) => [play, ...currentPlays]);
   }
 
+  function addPlays(playInputs) {
+    const nextPlays = playInputs.map((playInput) => ({
+      id: createId(),
+      ...buildPlay(playInput, games),
+    }));
+
+    if (shouldUseFirestore) {
+      const batch = writeBatch(firestoreDb);
+
+      nextPlays.forEach((play) => {
+        batch.set(groupDocRef("plays", play.id), cleanForFirestore({ ...play, createdAt: serverTimestamp() }));
+      });
+
+      batch.commit();
+      return nextPlays.length;
+    }
+
+    setPlays((currentPlays) => [...nextPlays, ...currentPlays]);
+    return nextPlays.length;
+  }
+
   function updatePlay(playId, playInput) {
     if (shouldUseFirestore) {
       const existingPlay = plays.find((play) => play.id === playId);
@@ -792,6 +813,7 @@ export function AppDataProvider({ children }) {
       updateGameScoreCategories,
       deleteGame,
       addPlay,
+      addPlays,
       updatePlay,
       deletePlay,
       updatePlayerProfile,

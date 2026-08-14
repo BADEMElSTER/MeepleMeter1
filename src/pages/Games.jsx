@@ -84,10 +84,10 @@ function createScoreCategory() {
 }
 
 export default function Games() {
-  const { userProfile } = useAuth();
-  const { stats, addGame, updateGame, deleteGame } = useAppData();
-  const username = userProfile?.username || userProfile?.displayName || "";
-  const normalizedUsername = username.trim().toLowerCase();
+  const { user, userProfile } = useAuth();
+  const { stats, playerProfiles, addGame, updateGame, deleteGame } = useAppData();
+  const username = getCurrentPlayerName(user, userProfile, playerProfiles);
+  const normalizedUsername = normalizeName(username);
   const [sortConfig, setSortConfig] = useState({ key: "title", direction: "asc" });
   const games = sortGames(stats.gamesWithPlayCounts, sortConfig);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -709,6 +709,33 @@ function sortGames(games, sortConfig) {
 
 function getGameOwner(game) {
   return game?.ownerNormalized || game?.owner?.trim().toLowerCase() || "";
+}
+
+function getCurrentPlayerName(user, userProfile, playerProfiles) {
+  const profileName = userProfile?.username || userProfile?.displayName;
+
+  if (profileName?.trim()) {
+    return profileName.trim();
+  }
+
+  const userEmail = user?.email?.trim().toLowerCase();
+
+  if (!userEmail) {
+    return "";
+  }
+
+  const matchingPlayerProfile = playerProfiles.find((profile) => {
+    const profileEmail = profile.accountEmail?.trim().toLowerCase();
+    const profileUsername = profile.accountUsername?.trim().toLowerCase();
+
+    return profileEmail === userEmail || profileUsername === userEmail;
+  });
+
+  return matchingPlayerProfile?.name ?? "";
+}
+
+function normalizeName(name) {
+  return String(name ?? "").trim().toLowerCase();
 }
 
 function canEditGame(game, normalizedUsername) {

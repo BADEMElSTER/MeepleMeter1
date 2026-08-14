@@ -1,6 +1,7 @@
 import { useRef } from "react";
 import { Navigate, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext.jsx";
+import { useAppData } from "../data/AppDataContext.jsx";
 
 const swipeRoutes = ["/dashboard", "/plays", "/stats", "/games"];
 
@@ -27,11 +28,12 @@ function navigateWithPageTransition(navigate, route, direction) {
 export default function AppLayout() {
   const { isAdmin, isAuthLoading, isFirebaseConfigured, logout, user, userProfile } =
     useAuth();
+  const { playerProfiles } = useAppData();
   const location = useLocation();
   const navigate = useNavigate();
   const touchStartRef = useRef(null);
   const canSeeAdmin = !isFirebaseConfigured || isAdmin;
-  const username = userProfile?.username || userProfile?.displayName || "";
+  const username = getCurrentPlayerName(user, userProfile, playerProfiles);
 
   if (isAuthLoading) {
     return (
@@ -135,4 +137,27 @@ export default function AppLayout() {
       </main>
     </div>
   );
+}
+
+function getCurrentPlayerName(user, userProfile, playerProfiles) {
+  const profileName = userProfile?.username || userProfile?.displayName;
+
+  if (profileName?.trim()) {
+    return profileName.trim();
+  }
+
+  const userEmail = user?.email?.trim().toLowerCase();
+
+  if (!userEmail) {
+    return "";
+  }
+
+  const matchingPlayerProfile = playerProfiles.find((profile) => {
+    const profileEmail = profile.accountEmail?.trim().toLowerCase();
+    const profileUsername = profile.accountUsername?.trim().toLowerCase();
+
+    return profileEmail === userEmail || profileUsername === userEmail;
+  });
+
+  return matchingPlayerProfile?.name ?? "";
 }
