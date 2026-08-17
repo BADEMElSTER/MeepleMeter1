@@ -5,6 +5,7 @@ import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
   signOut,
+  updateEmail,
   updatePassword,
 } from "firebase/auth";
 import {
@@ -201,6 +202,59 @@ export function AuthProvider({ children }) {
     await updatePassword(user, newPassword);
   }
 
+  async function changeEmail(nextEmail) {
+    if (!user || !firestoreDb) {
+      throw new Error("Du bist nicht angemeldet.");
+    }
+
+    const email = nextEmail.trim();
+
+    if (!email) {
+      throw new Error("Bitte gib eine E-Mail-Adresse ein.");
+    }
+
+    await updateEmail(user, email);
+
+    const usernameNormalized =
+      userProfile?.usernameNormalized || userProfile?.username?.trim().toLowerCase() || "";
+
+    await setDoc(
+      doc(firestoreDb, "users", user.uid),
+      {
+        email,
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    );
+
+    await setDoc(
+      doc(firestoreDb, "groups", firebaseGroupId, "members", user.uid),
+      {
+        email,
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    );
+
+    if (usernameNormalized) {
+      await setDoc(
+        doc(firestoreDb, "usernames", usernameNormalized),
+        {
+          email,
+          uid: user.uid,
+          username: userProfile?.username || userProfile?.displayName || usernameNormalized,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
+    }
+
+    setUserProfile((currentProfile) => ({
+      ...currentProfile,
+      email,
+    }));
+  }
+
   async function updateProfile(updates) {
     if (!user || !firestoreDb) {
       throw new Error("Du bist nicht angemeldet.");
@@ -284,6 +338,7 @@ export function AuthProvider({ children }) {
       hasUsername: Boolean(userProfile?.username?.trim()),
       isAuthLoading,
       isFirebaseConfigured,
+      changeEmail,
       changePassword,
       login,
       register,

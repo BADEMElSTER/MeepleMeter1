@@ -161,15 +161,23 @@ export default function Admin() {
       <div className="panel-grid admin-grid">
         <article className="panel">
           <p className="eyebrow">Import</p>
-          <h2>Spieleliste hochladen</h2>
-          <p>
-            Unterstützt JSON-Listen oder CSV mit Spalten wie title/name, category, year,
-            minPlayers, maxPlayers und duration.
-          </p>
-          <label className="file-upload">
-            <input accept=".json,.csv,text/csv,application/json" type="file" onChange={handleGameImport} />
-            Spieleliste auswählen
-          </label>
+          <h2>Daten hochladen</h2>
+          <div className="admin-action-list">
+            <div className="admin-action-row">
+              <label className="file-upload">
+                <input accept=".json,.csv,text/csv,application/json" type="file" onChange={handleGameImport} />
+                Spieleliste auswählen
+              </label>
+              <InfoIcon text="Unterstützt JSON oder CSV mit title/name, category, year, minPlayers, maxPlayers und duration." />
+            </div>
+            <div className="admin-action-row">
+              <label className="file-upload">
+                <input accept=".json,.csv,text/csv,application/json" type="file" onChange={handlePlayImport} />
+                Partienliste auswählen
+              </label>
+              <InfoIcon text="Unterstützt JSON oder CSV mit game/title, date, duration, scoringMode, participants und winner." />
+            </div>
+          </div>
           {importMessage && <p className="form-message">{importMessage}</p>}
           {importPreview && (
             <div className="import-preview">
@@ -221,19 +229,6 @@ export default function Admin() {
               </div>
             </div>
           )}
-        </article>
-
-        <article className="panel">
-          <p className="eyebrow">Import</p>
-          <h2>Gespielte Partien hochladen</h2>
-          <p>
-            Unterstützt JSON-Listen oder CSV mit Spalten wie game/title, date, duration,
-            scoringMode, participants und winner.
-          </p>
-          <label className="file-upload">
-            <input accept=".json,.csv,text/csv,application/json" type="file" onChange={handlePlayImport} />
-            Partienliste auswählen
-          </label>
           {playImportMessage && <p className="form-message">{playImportMessage}</p>}
           {playImportPreview && (
             <div className="import-preview">
@@ -300,31 +295,29 @@ export default function Admin() {
       </div>
 
       <div className="panel-grid admin-grid">
-        <article className="panel admin-link-card">
-          <p className="eyebrow">Mitspieler</p>
-          <h2>Spielerliste verwalten</h2>
-          <p>Mitspieler suchen, Account-Status pflegen und spätere Benutzerkonten vorbereiten.</p>
-          <Link className="button button-secondary" to="/admin/players">
-            Mitspieler verwalten
-          </Link>
-        </article>
-
-        <article className="panel admin-link-card">
-          <p className="eyebrow">Spiele</p>
-          <h2>Spiele verwalten</h2>
-          <p>Spiele suchen, nach Kategorie filtern und ausgewählte Spiele löschen.</p>
-          <Link className="button button-secondary" to="/admin/games">
-            Spiele löschen
-          </Link>
-        </article>
-
-        <article className="panel admin-link-card">
-          <p className="eyebrow">Partien</p>
-          <h2>Partien verwalten</h2>
-          <p>Partien nach Spiel, Gewinner und Datum filtern und ausgewählte Einträge löschen.</p>
-          <Link className="button button-secondary" to="/admin/plays">
-            Partien löschen
-          </Link>
+        <article className="panel admin-link-card admin-combined-card">
+          <p className="eyebrow">Verwalten</p>
+          <h2>Daten verwalten</h2>
+          <div className="admin-action-list">
+            <div className="admin-action-row">
+              <Link className="button button-secondary" to="/admin/players">
+                Mitspieler verwalten
+              </Link>
+              <InfoIcon text="Mitspieler suchen, Account-Status pflegen und spätere Benutzerkonten vorbereiten." />
+            </div>
+            <div className="admin-action-row">
+              <Link className="button button-secondary" to="/admin/games">
+                Spiele verwalten
+              </Link>
+              <InfoIcon text="Spieldaten, Spieleranzahl und Eigentümer bearbeiten oder ausgewählte Spiele löschen." />
+            </div>
+            <div className="admin-action-row">
+              <Link className="button button-secondary" to="/admin/plays">
+                Partien löschen
+              </Link>
+              <InfoIcon text="Partien nach Spiel, Gewinner und Datum filtern und ausgewählte Einträge löschen." />
+            </div>
+          </div>
         </article>
       </div>
 
@@ -400,6 +393,14 @@ export default function Admin() {
         </div>
       )}
     </section>
+  );
+}
+
+function InfoIcon({ text }) {
+  return (
+    <span className="info-icon admin-info-icon" title={text} aria-label={text} role="img">
+      i
+    </span>
   );
 }
 

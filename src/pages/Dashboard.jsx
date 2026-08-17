@@ -27,8 +27,10 @@ export default function Dashboard() {
     (sum, play) => sum + Number(play.duration || 0),
     0,
   );
+  const latestPersonalPlays = personalPlays.slice(0, 5);
   const personalMostPlayedGame = getMostPlayedGame(personalPlays, games);
   const groupMostPlayedGame = getMostPlayedGame(plays, games);
+  const placementAnalytics = getPlacementAnalytics(personalPlays, games, normalizedUsername);
 
   return (
     <section className="page">
@@ -37,7 +39,7 @@ export default function Dashboard() {
         {username && <p className="page-intro">Deine Brettspielrunde auf einen Blick.</p>}
       </div>
 
-      <div className="metric-grid">
+      <div className="metric-grid dashboard-metric-grid">
         <Metric
           label="Eigene Spiele"
           value={ownGames.length}
@@ -70,17 +72,49 @@ export default function Dashboard() {
               : "Gruppe: noch keine Partien"
           }
         />
+        <Metric
+          label="Ø Platzierung"
+          value={
+            placementAnalytics.averagePlacement === null
+              ? "–"
+              : `Platz ${formatPlacement(placementAnalytics.averagePlacement)}`
+          }
+          detail={
+            placementAnalytics.placementCount
+              ? `${placementAnalytics.placementCount} gewertete Partien`
+              : "Noch keine Platzierungen"
+          }
+        />
+        <Metric
+          label="Bestes Spiel nach Platzierung"
+          value={
+            placementAnalytics.bestGame ? (
+              <GameLink
+                gameId={placementAnalytics.bestGame.id}
+                title={placementAnalytics.bestGame.title}
+              >
+                {placementAnalytics.bestGame.title}
+              </GameLink>
+            ) : (
+              "–"
+            )
+          }
+          detail={
+            placementAnalytics.bestGame
+              ? `Ø Platz ${formatPlacement(placementAnalytics.bestGame.averagePlacement)} · ${placementAnalytics.bestGame.placementCount} gewertet`
+              : "Noch keine Platzierungen"
+          }
+        />
       </div>
 
       <div className="panel-grid">
         <article className="panel">
           <div className="panel-header">
             <h2>{username ? "Meine letzten Partien" : "Letzte Partien"}</h2>
-            <Link to="/plays">Alle ansehen</Link>
           </div>
           <div className="list">
-            {personalPlays.length ? (
-              personalPlays.map((play) => {
+            {latestPersonalPlays.length ? (
+              latestPersonalPlays.map((play) => {
                 const ownPlacement = getOwnPlacement(play, normalizedUsername);
 
                 return (
@@ -120,6 +154,9 @@ export default function Dashboard() {
               </p>
             )}
           </div>
+          <Link className="panel-footer-link" to="/plays">
+            Alle Partien anzeigen
+          </Link>
         </article>
 
         <article className="panel highlight-panel">
@@ -207,18 +244,112 @@ function getMostPlayedGame(personalPlays, games) {
 }
 
 function getOwnPlacement(play, normalizedUsername) {
-  if (!normalizedUsername || !play.participants?.length || play.scoringMode === "none") {
+  if (!normalizedUsername) {
     return null;
   }
 
-  const sortedParticipants = [...play.participants].sort((first, second) =>
-    play.scoringMode === "low"
-      ? Number(first.score) - Number(second.score)
-      : Number(second.score) - Number(first.score),
+  const participant = (play.participants ?? []).find(
+    (entry) => normalizeName(entry.name) === normalizedUsername,
   );
-  const ownIndex = sortedParticipants.findIndex(
-    (participant) => participant.name.trim().toLowerCase() === normalizedUsername,
+  const placement = getPlayPlacements(play).get(participant?.name);
+
+  return placement ?? null;
+}
+
+function getPlacementAnalytics(personalPlays, games, normalizedUsername) {
+  const gamePlacements = new Map();
+  let totalPlacement = 0;
+  let placementCount = 0;
+
+  for (const play of personalPlays) {
+    const participant = (play.participants ?? []).find(
+      (entry) => normalizeName(entry.name) === normalizedUsername,
+    );
+    const placement = getPlayPlacements(play).get(participant?.name);
+
+    if (placement === undefined) {
+      continue;
+    }
+
+    totalPlacement += placement;
+    placementCount += 1;
+
+    const gameKey = play.gameId || play.game;
+    const current = gamePlacements.get(gameKey) ?? {
+      id: play.gameId,
+      title: play.game || "Unbekanntes Spiel",
+      totalPlacement: 0,
+      placementCount: 0,
+    };
+    current.totalPlacement += placement;
+    current.placementCount += 1;
+    gamePlacements.set(gameKey, current);
+  }
+
+  const bestGame = [...gamePlacements.values()]
+    .map((entry) => {
+      const game = games.find(
+        (candidate) => candidate.id === entry.id || candidate.title === entry.title,
+      );
+
+      return {
+        ...entry,
+        id: game?.id ?? entry.id,
+        title: game?.title ?? entry.title,
+        averagePlacement: entry.totalPlacement / entry.placementCount,
+      };
+    })
+    .sort(
+      (first, second) =>
+        first.averagePlacement - second.averagePlacement ||
+        second.placementCount - first.placementCount ||
+        first.title.localeCompare(second.title, "de"),
+    )[0] ?? null;
+
+  return {
+    averagePlacement: placementCount ? totalPlacement / placementCount : null,
+    placementCount,
+    bestGame,
+  };
+}
+
+function getPlayPlacements(play) {
+  const participants = (play.participants ?? []).filter(
+    (participant) =>
+      participant.score !== null && participant.score !== undefined && participant.score !== "",
   );
 
-  return ownIndex >= 0 ? ownIndex + 1 : null;
+  if (!participants.length || play.scoringMode === "none") {
+    return new Map();
+  }
+
+  const sortedParticipants = [...participants].sort((first, second) => {
+    if (play.scoringMode === "low" || play.scoringMode === "placement") {
+      return Number(first.score) - Number(second.score);
+    }
+
+    return Number(second.score) - Number(first.score);
+  });
+  const placements = new Map();
+  let currentPlacement = 1;
+
+  for (let index = 0; index < sortedParticipants.length; index += 1) {
+    const participant = sortedParticipants[index];
+    const previousParticipant = sortedParticipants[index - 1];
+
+    if (previousParticipant && Number(previousParticipant.score) !== Number(participant.score)) {
+      currentPlacement = index + 1;
+    }
+
+    placements.set(participant.name, currentPlacement);
+  }
+
+  return placements;
+}
+
+function formatPlacement(value) {
+  return Number(value).toLocaleString("de-DE", {
+    minimumFractionDigits: Number.isInteger(value) ? 0 : 1,
+    maximumFractionDigits: 1,
+  });
 }

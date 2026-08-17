@@ -9,6 +9,7 @@ export default function AdminPlays() {
   const [winnerFilter, setWinnerFilter] = useState("all");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
+  const [sortConfig, setSortConfig] = useState({ key: "date", direction: "desc" });
 
   const gameNames = useMemo(
     () => [...new Set(plays.map((play) => play.game).filter(Boolean))].sort((a, b) => a.localeCompare(b, "de")),
@@ -30,9 +31,22 @@ export default function AdminPlays() {
 
           return matchesGame && matchesWinner && matchesFrom && matchesTo;
         })
-        .sort((firstPlay, secondPlay) => new Date(secondPlay.date) - new Date(firstPlay.date)),
-    [fromDate, gameFilter, plays, toDate, winnerFilter],
+        .sort((firstPlay, secondPlay) =>
+          compareValues(
+            getPlaySortValue(firstPlay, sortConfig.key),
+            getPlaySortValue(secondPlay, sortConfig.key),
+            sortConfig.direction,
+          ),
+        ),
+    [fromDate, gameFilter, plays, sortConfig, toDate, winnerFilter],
   );
+
+  function updateSort(key) {
+    setSortConfig((currentSort) => ({
+      key,
+      direction: currentSort.key === key && currentSort.direction === "asc" ? "desc" : "asc",
+    }));
+  }
 
   function toggleSelection(playId) {
     setSelectedPlayIds((currentIds) =>
@@ -43,10 +57,7 @@ export default function AdminPlays() {
   }
 
   function deleteSelectedPlays() {
-    if (!selectedPlayIds.length) {
-      return;
-    }
-
+    if (!selectedPlayIds.length) return;
     const confirmed = window.confirm(`${selectedPlayIds.length} Partien löschen?`);
 
     if (confirmed) {
@@ -60,89 +71,104 @@ export default function AdminPlays() {
       <div className="page-heading row-heading">
         <div>
           <p className="eyebrow">Admin</p>
-          <h1>Partien löschen.</h1>
+          <h1>Partien verwalten.</h1>
         </div>
-        <Link className="ghost-button" to="/admin">
-          Zur Admin-Übersicht
-        </Link>
+        <Link className="ghost-button" to="/admin">Zur Admin-Übersicht</Link>
       </div>
 
       <div className="panel admin-filter-panel">
-        <label>
-          Spiel
+        <label>Spiel
           <select value={gameFilter} onChange={(event) => setGameFilter(event.target.value)}>
             <option value="all">Alle Spiele</option>
-            {gameNames.map((gameName) => (
-              <option key={gameName} value={gameName}>
-                {gameName}
-              </option>
-            ))}
+            {gameNames.map((gameName) => <option key={gameName} value={gameName}>{gameName}</option>)}
           </select>
         </label>
-        <label>
-          Gewinner
+        <label>Gewinner
           <select value={winnerFilter} onChange={(event) => setWinnerFilter(event.target.value)}>
             <option value="all">Alle Gewinner</option>
-            {winnerNames.map((winnerName) => (
-              <option key={winnerName} value={winnerName}>
-                {winnerName}
-              </option>
-            ))}
+            {winnerNames.map((winnerName) => <option key={winnerName} value={winnerName}>{winnerName}</option>)}
           </select>
         </label>
-        <label>
-          Von
-          <input value={fromDate} type="date" onChange={(event) => setFromDate(event.target.value)} />
-        </label>
-        <label>
-          Bis
-          <input value={toDate} type="date" onChange={(event) => setToDate(event.target.value)} />
-        </label>
+        <label>Von<input value={fromDate} type="date" onChange={(event) => setFromDate(event.target.value)} /></label>
+        <label>Bis<input value={toDate} type="date" onChange={(event) => setToDate(event.target.value)} /></label>
       </div>
 
       <article className="table-card admin-table-card">
         <div className="panel-header row-heading">
-          <div>
-            <p className="eyebrow">{filteredPlays.length} Treffer</p>
-            <h2>Partien auswählen</h2>
-          </div>
-          <button className="ghost-button danger-action" type="button" onClick={deleteSelectedPlays}>
+          <div><p className="eyebrow">{filteredPlays.length} Treffer</p><h2>Partien auswählen</h2></div>
+          <button className="ghost-button danger-action" type="button" disabled={!selectedPlayIds.length} onClick={deleteSelectedPlays}>
             Auswahl löschen ({selectedPlayIds.length})
           </button>
         </div>
-        <table>
-          <thead>
-            <tr>
+        <div className="table-scroll">
+          <table>
+            <thead><tr>
               <th>Auswahl</th>
-              <th>Datum</th>
-              <th>Spiel</th>
-              <th>Gewinner</th>
-              <th>Mitspieler</th>
-              <th>Dauer</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredPlays.map((play) => (
+              <th><SortButton columnKey="date" label="Spieldatum" sortConfig={sortConfig} onSort={updateSort} /></th>
+              <th><SortButton columnKey="game" label="Spiel" sortConfig={sortConfig} onSort={updateSort} /></th>
+              <th><SortButton columnKey="winner" label="Gewinner" sortConfig={sortConfig} onSort={updateSort} /></th>
+              <th><SortButton columnKey="players" label="Mitspieler" sortConfig={sortConfig} onSort={updateSort} /></th>
+              <th><SortButton columnKey="duration" label="Dauer" sortConfig={sortConfig} onSort={updateSort} /></th>
+              <th><SortButton columnKey="createdAt" label="Ergebnis erstellt" sortConfig={sortConfig} onSort={updateSort} /></th>
+            </tr></thead>
+            <tbody>{filteredPlays.map((play) => (
               <tr key={play.id}>
-                <td>
-                  <input
-                    checked={selectedPlayIds.includes(play.id)}
-                    type="checkbox"
-                    onChange={() => toggleSelection(play.id)}
-                  />
-                </td>
-                <td>{new Date(play.date).toLocaleDateString("de-DE")}</td>
-                <td>
-                  <strong>{play.game}</strong>
-                </td>
+                <td><input aria-label={`${play.game} auswählen`} checked={selectedPlayIds.includes(play.id)} type="checkbox" onChange={() => toggleSelection(play.id)} /></td>
+                <td>{formatDate(play.date)}</td>
+                <td><strong>{play.game}</strong></td>
                 <td>{play.winner}</td>
                 <td>{play.players}</td>
                 <td>{play.duration} Min.</td>
+                <td>{formatCreatedAt(play.createdAt)}</td>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            ))}</tbody>
+          </table>
+        </div>
       </article>
     </section>
   );
+}
+
+function SortButton({ columnKey, label, sortConfig, onSort }) {
+  const isActive = sortConfig.key === columnKey;
+  return (
+    <button className="sort-button" type="button" onClick={() => onSort(columnKey)} aria-label={`${label} ${isActive && sortConfig.direction === "asc" ? "absteigend" : "aufsteigend"} sortieren`}>
+      {label}<span aria-hidden="true">{isActive ? (sortConfig.direction === "asc" ? "↑" : "↓") : "↕"}</span>
+    </button>
+  );
+}
+
+function getPlaySortValue(play, key) {
+  if (key === "date" || key === "createdAt") return getTimestamp(play[key]);
+  return play[key];
+}
+
+function compareValues(firstValue, secondValue, direction) {
+  const multiplier = direction === "asc" ? 1 : -1;
+  const firstMissing = firstValue === null || firstValue === undefined || firstValue === "";
+  const secondMissing = secondValue === null || secondValue === undefined || secondValue === "";
+  if (firstMissing && secondMissing) return 0;
+  if (firstMissing) return 1;
+  if (secondMissing) return -1;
+  if (typeof firstValue === "number" && typeof secondValue === "number") return (firstValue - secondValue) * multiplier;
+  return String(firstValue).localeCompare(String(secondValue), "de", { numeric: true }) * multiplier;
+}
+
+function getTimestamp(value) {
+  if (!value) return null;
+  if (typeof value.toMillis === "function") return value.toMillis();
+  if (typeof value.toDate === "function") return value.toDate().getTime();
+  if (typeof value === "object" && Number.isFinite(value.seconds)) return value.seconds * 1000;
+  const timestamp = new Date(value).getTime();
+  return Number.isNaN(timestamp) ? null : timestamp;
+}
+
+function formatDate(value) {
+  const timestamp = getTimestamp(value);
+  return timestamp ? new Date(timestamp).toLocaleDateString("de-DE") : "–";
+}
+
+function formatCreatedAt(value) {
+  const timestamp = getTimestamp(value);
+  return timestamp ? new Date(timestamp).toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" }) : "–";
 }

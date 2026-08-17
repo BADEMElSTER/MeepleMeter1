@@ -31,6 +31,7 @@ export default function Plays() {
   const [newPlayerName, setNewPlayerName] = useState("");
   const [playerSearch, setPlayerSearch] = useState("");
   const [formError, setFormError] = useState("");
+  const [playScope, setPlayScope] = useState("mine");
   const deletedPlayerNames = playerProfiles
     .filter((profile) => profile.isDeleted)
     .map((profile) => profile.name.trim().toLowerCase());
@@ -46,7 +47,13 @@ export default function Plays() {
     .filter((name) => name.toLowerCase().includes(playerSearch.toLowerCase()));
   const selectedGame = games.find((game) => game.id === form.gameId);
   const scoreCategories = selectedGame?.scoreCategories ?? [];
-  const canUseDetailedScoring = form.scoringMode !== "none" && scoreCategories.length > 0;
+  const isRoundGame = Boolean(selectedGame?.isRoundGame);
+  const canUseDetailedScoring =
+    form.scoringMode !== "none" && (scoreCategories.length > 0 || isRoundGame);
+  const ownPlays = normalizedUsername
+    ? plays.filter((play) => hasParticipant(play, normalizedUsername))
+    : [];
+  const visiblePlays = playScope === "mine" ? ownPlays : plays;
 
   function getInitialForm(playerNames = knownPlayerNames, availableGames = games) {
     return {
@@ -55,6 +62,7 @@ export default function Plays() {
       scoringMode: "high",
       participants: playerNames.slice(0, 2).map((name) => ({ name, score: "" })),
       useDetailedScoring: false,
+      roundCompleted: {},
       winner: "",
       duration: "",
       note: "",
@@ -104,14 +112,57 @@ export default function Plays() {
               },
               score: calculateDetailedScore(
                 {
-                  ...(participant.scoreDetails ?? {}),
-                  [categoryId]: value,
+                  ...participant,
+                  scoreDetails: {
+                    ...(participant.scoreDetails ?? {}),
+                    [categoryId]: value,
+                  },
                 },
                 scoreCategories,
+                currentForm.participants.length,
               ),
             }
           : participant,
       ),
+    }));
+  }
+
+  function updateParticipantRoundScore(name, roundIndex, value) {
+    setFormError("");
+    setForm((currentForm) => ({
+      ...currentForm,
+      participants: currentForm.participants.map((participant) =>
+        participant.name === name
+          ? {
+              ...participant,
+              roundScores: {
+                ...(participant.roundScores ?? {}),
+                [roundIndex]: value,
+              },
+              score: calculateDetailedScore(
+                {
+                  ...participant,
+                  roundScores: {
+                    ...(participant.roundScores ?? {}),
+                    [roundIndex]: value,
+                  },
+                },
+                scoreCategories,
+                currentForm.participants.length,
+              ),
+            }
+          : participant,
+      ),
+    }));
+  }
+
+  function toggleRoundCompleted(roundIndex) {
+    setForm((currentForm) => ({
+      ...currentForm,
+      roundCompleted: {
+        ...(currentForm.roundCompleted ?? {}),
+        [roundIndex]: !currentForm.roundCompleted?.[roundIndex],
+      },
     }));
   }
 
@@ -151,9 +202,11 @@ export default function Plays() {
               name: participant.name,
               score: participant.score ?? "",
               scoreDetails: participant.scoreDetails ?? {},
+              roundScores: participant.roundScores ?? {},
             }))
           : [{ name: play.winner ?? "Spieler 1", score: "" }],
       useDetailedScoring: Boolean(play.useDetailedScoring),
+      roundCompleted: play.roundCompleted ?? {},
       winner: play.winner ?? "",
       duration: String(play.duration ?? ""),
       note: play.note ?? "",
@@ -184,7 +237,7 @@ export default function Plays() {
             ...form,
             participants: form.participants.map((participant) => ({
               ...participant,
-              score: calculateDetailedScore(participant.scoreDetails, scoreCategories),
+              score: calculateDetailedScore(participant, scoreCategories, form.participants.length),
             })),
           }
         : form;
@@ -422,7 +475,12 @@ export default function Plays() {
                 <ScoreDetailMatrix
                   categories={scoreCategories}
                   participants={form.participants}
+                  roundScoringMode={selectedGame?.roundScoringMode}
+                  showRounds={isRoundGame}
                   onChange={updateParticipantScoreDetail}
+                  onRoundChange={updateParticipantRoundScore}
+                  onToggleRoundCompleted={toggleRoundCompleted}
+                  roundCompleted={form.roundCompleted}
                 />
               </section>
             )}
@@ -436,8 +494,26 @@ export default function Plays() {
         </form>
       )}
 
+      <div className="play-scope-tabs" aria-label="Partien filtern">
+        <button
+          className={playScope === "mine" ? "active" : ""}
+          type="button"
+          onClick={() => setPlayScope("mine")}
+        >
+          Meine Partien
+        </button>
+        <button
+          className={playScope === "all" ? "active" : ""}
+          type="button"
+          onClick={() => setPlayScope("all")}
+        >
+          Alle Partien
+        </button>
+      </div>
+
       <div className="play-list">
-        {plays.map((play) => {
+        {visiblePlays.length ? (
+          visiblePlays.map((play) => {
           const sortedParticipants = sortParticipantsByScore(play.participants ?? [], play.scoringMode);
 
           return (
@@ -535,7 +611,16 @@ export default function Plays() {
               </dl>
             </article>
           );
-        })}
+        })
+        ) : (
+          <article className="play-card compact-play-card empty-play-card">
+            <p>
+              {playScope === "mine"
+                ? "Für dich wurden noch keine Partien erfasst."
+                : "Es wurden noch keine Partien erfasst."}
+            </p>
+          </article>
+        )}
       </div>
     </section>
   );
@@ -546,6 +631,12 @@ function hasMissingScores(participants) {
     const score = String(participant.score ?? "").trim();
     return score === "" || !Number.isFinite(Number(score));
   });
+}
+
+function hasParticipant(play, normalizedUsername) {
+  return play.participants?.some(
+    (participant) => participant.name?.trim().toLowerCase() === normalizedUsername,
+  );
 }
 
 function sortParticipantsByScore(participants, scoringMode) {
@@ -573,54 +664,122 @@ function sortParticipantsByScore(participants, scoringMode) {
   });
 }
 
-function calculateDetailedScore(scoreDetails = {}, categories = []) {
-  return categories.reduce((sum, category) => {
+function calculateDetailedScore(participant = {}, categories = [], roundCount = 0) {
+  const scoreDetails = participant.scoreDetails ?? {};
+  const categoryScore = categories.reduce((sum, category) => {
     const rawValue = Number(scoreDetails[category.id]) || 0;
     const multiplier = Number(category.multiplier) || 1;
     const value = rawValue * multiplier;
 
     return category.type === "minus" ? sum - value : sum + value;
   }, 0);
+
+  const roundScore = Array.from({ length: roundCount }).reduce(
+    (sum, _entry, roundIndex) => sum + (Number(participant.roundScores?.[roundIndex]) || 0),
+    0,
+  );
+
+  return categoryScore + roundScore;
 }
 
-function ScoreDetailMatrix({ categories, participants, onChange }) {
+function ScoreDetailMatrix({
+  categories,
+  onChange,
+  onRoundChange,
+  onToggleRoundCompleted,
+  participants,
+  roundCompleted = {},
+  roundScoringMode,
+  showRounds,
+}) {
+  const roundIndexes = Array.from({ length: participants.length }, (_entry, index) => index);
+
   return (
     <div className="score-detail-matrix-wrap">
-      <table className="score-detail-matrix">
-        <thead>
-          <tr>
-            <th>Kategorie</th>
-            {participants.map((participant) => (
-              <th key={participant.name}>{participant.name}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {categories.map((category) => (
-            <tr key={category.id}>
-              <th>
-                {category.name} {category.type === "minus" ? "\u2212" : "+"}
-                {Number(category.multiplier) !== 1 ? ` \u00d7 ${category.multiplier}` : ""}
-              </th>
+      {categories.length > 0 && (
+        <table className="score-detail-matrix">
+          <thead>
+            <tr>
+              <th>Kategorie</th>
               {participants.map((participant) => (
-                <td key={`${category.id}-${participant.name}`}>
-                  <input
-                    type="number"
-                    value={participant?.scoreDetails?.[category.id] ?? ""}
-                    onChange={(event) => onChange(participant.name, category.id, event.target.value)}
-                    placeholder="0"
-                  />
-                </td>
+                <th key={participant.name}>{participant.name}</th>
               ))}
             </tr>
-          ))}
-        </tbody>
+          </thead>
+          <tbody>
+            {categories.map((category) => (
+              <tr key={category.id}>
+                <th>
+                  {category.name} {category.type === "minus" ? "\u2212" : "+"}
+                  {Number(category.multiplier) !== 1 ? ` \u00d7 ${category.multiplier}` : ""}
+                </th>
+                {participants.map((participant) => (
+                  <td key={`${category.id}-${participant.name}`}>
+                    <input
+                      type="number"
+                      value={participant?.scoreDetails?.[category.id] ?? ""}
+                      onChange={(event) => onChange(participant.name, category.id, event.target.value)}
+                      placeholder="0"
+                    />
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      {showRounds && (
+        <table className="score-detail-matrix round-score-matrix">
+          <thead>
+            <tr>
+              <th>Runde</th>
+              {participants.map((participant) => (
+                <th key={participant.name}>{participant.name}</th>
+              ))}
+              <th>Fertig</th>
+            </tr>
+          </thead>
+          <tbody>
+            {roundIndexes.map((roundIndex) => (
+              <tr key={`round-${roundIndex}`}>
+                <th>
+                  Runde {roundIndex + 1}
+                  {roundScoringMode === "minus" ? " · Minuspunkte" : ""}
+                </th>
+                {participants.map((participant) => (
+                  <td key={`${roundIndex}-${participant.name}`}>
+                    <input
+                      type="number"
+                      value={participant?.roundScores?.[roundIndex] ?? ""}
+                      onChange={(event) =>
+                        onRoundChange(participant.name, roundIndex, event.target.value)
+                      }
+                      placeholder="0"
+                    />
+                  </td>
+                ))}
+                <td>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(roundCompleted?.[roundIndex])}
+                    onChange={() => onToggleRoundCompleted(roundIndex)}
+                    aria-label={`Runde ${roundIndex + 1} abgeschlossen`}
+                  />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      <table className="score-detail-matrix">
         <tfoot>
           <tr>
             <th>Gesamtpunkte</th>
             {participants.map((participant) => (
               <td key={`total-${participant.name}`}>
-                <strong>{calculateDetailedScore(participant.scoreDetails, categories)}</strong>
+                <strong>{calculateDetailedScore(participant, categories, participants.length)}</strong>
               </td>
             ))}
           </tr>

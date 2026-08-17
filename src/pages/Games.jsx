@@ -21,6 +21,8 @@ const initialForm = {
   catalogExpansions: [],
   expansions: "",
   scoreCategories: [],
+  isRoundGame: false,
+  roundScoringMode: "plus",
 };
 
 const sortableColumns = [
@@ -71,6 +73,8 @@ function getGameForm(game) {
     catalogExpansions: game.catalogExpansions ?? [],
     expansions: (game.expansions ?? []).map((expansion) => expansion.name).join(", "),
     scoreCategories: game.scoreCategories ?? [],
+    isRoundGame: Boolean(game.isRoundGame),
+    roundScoringMode: game.roundScoringMode ?? "plus",
   };
 }
 
@@ -89,22 +93,25 @@ export default function Games() {
   const username = getCurrentPlayerName(user, userProfile, playerProfiles);
   const normalizedUsername = normalizeName(username);
   const [sortConfig, setSortConfig] = useState({ key: "title", direction: "asc" });
-  const games = sortGames(stats.gamesWithPlayCounts, sortConfig);
+  const allGames = sortGames(stats.gamesWithPlayCounts, sortConfig);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingGameId, setEditingGameId] = useState(null);
   const [form, setForm] = useState(initialForm);
   const [catalogQuery, setCatalogQuery] = useState("");
-  const [isCatalogSearchOpen, setIsCatalogSearchOpen] = useState(true);
+  const [collectionQuery, setCollectionQuery] = useState("");
+  const [gameScope, setGameScope] = useState("all");
   const [isScoringEditorOpen, setIsScoringEditorOpen] = useState(false);
   const [formMessage, setFormMessage] = useState("");
   const formRef = useRef(null);
   const ownDataRef = useRef(null);
   const titleInputRef = useRef(null);
   const catalogResults = getCatalogResults(catalogQuery, stats.gamesWithPlayCounts);
+  const scopedGames = filterGamesByScope(allGames, gameScope, normalizedUsername);
+  const games = filterGames(scopedGames, collectionQuery);
   const categorySelectValue = commonCategories.includes(form.category)
     ? form.category
     : customCategoryValue;
-  const editingGame = editingGameId ? games.find((game) => game.id === editingGameId) : null;
+  const editingGame = editingGameId ? allGames.find((game) => game.id === editingGameId) : null;
   const isEditingUnassignedGame = Boolean(editingGame && !getGameOwner(editingGame));
 
   function updateField(field, value) {
@@ -123,7 +130,6 @@ export default function Games() {
     setEditingGameId(null);
     setForm({ ...initialForm, owner: username });
     setCatalogQuery("");
-    setIsCatalogSearchOpen(true);
     setIsScoringEditorOpen(false);
     setFormMessage("");
     setIsFormOpen(true);
@@ -138,7 +144,6 @@ export default function Games() {
     setEditingGameId(game.id);
     setForm(getGameForm(game));
     setCatalogQuery("");
-    setIsCatalogSearchOpen(false);
     setIsScoringEditorOpen(Boolean(game.scoreCategories?.length));
     setFormMessage("");
     setIsFormOpen(true);
@@ -152,7 +157,6 @@ export default function Games() {
     setEditingGameId(null);
     setForm({ ...initialForm, owner: username });
     setCatalogQuery("");
-    setIsCatalogSearchOpen(true);
     setIsScoringEditorOpen(false);
     setFormMessage("");
     setIsFormOpen(false);
@@ -176,9 +180,10 @@ export default function Games() {
       catalogExpansions: entry.expansions ?? [],
       expansions: (entry.expansions ?? []).map((expansion) => expansion.name).join(", "),
       scoreCategories: [],
+      isRoundGame: false,
+      roundScoringMode: "plus",
     });
     setCatalogQuery("");
-    setIsCatalogSearchOpen(false);
     window.setTimeout(() => {
       ownDataRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
       titleInputRef.current?.focus({ preventScroll: true });
@@ -308,65 +313,49 @@ export default function Games() {
             </button>
           </div>
           {!editingGameId && (
-            <section
-              className={`catalog-search ${
-                isCatalogSearchOpen ? "" : "catalog-search-collapsed"
-              }`}
-            >
-              <div className="catalog-search-header">
-                <div>
-                  <p className="eyebrow">Spielekatalog</p>
-                  <h3>Erst im Katalog suchen.</h3>
-                  <p>
-                    Der Katalog ist getrennt von deiner Sammlung. Beim Übernehmen wird daraus
-                    ein persönliches Spiel angelegt.
-                  </p>
-                </div>
-                <button
-                  className="ghost-button"
-                  type="button"
-                  onClick={() => setIsCatalogSearchOpen((currentValue) => !currentValue)}
+            <section className="catalog-search catalog-search-minimal">
+              <div className="catalog-search-row">
+                <input
+                  value={catalogQuery}
+                  onChange={(event) => setCatalogQuery(event.target.value)}
+                  placeholder="Spiel suchen"
+                  aria-label="Spiel im Katalog suchen"
+                />
+                <span
+                  className="info-icon"
+                  title="Aus dem Katalog übernommene Spiele werden als persönliches Spiel in deiner Sammlung angelegt."
+                  aria-label="Aus dem Katalog übernommene Spiele werden als persönliches Spiel in deiner Sammlung angelegt."
+                  role="img"
                 >
-                  {isCatalogSearchOpen ? "Minimieren" : "Katalog öffnen"}
-                </button>
+                  i
+                </span>
               </div>
-              {isCatalogSearchOpen && (
-                <>
-                  <Field label="Katalog durchsuchen">
-                    <input
-                      value={catalogQuery}
-                      onChange={(event) => setCatalogQuery(event.target.value)}
-                      placeholder="z. B. Ark Nova, Brass, Dune"
-                    />
-                  </Field>
-                  {catalogQuery.trim() && (
-                    <div className="catalog-results">
-                      {catalogResults.map((entry) => (
-                        <article className="catalog-result" key={entry.id}>
-                          <div>
-                            <strong>{entry.name}</strong>
-                            <span>
-                              {entry.year ?? "o. J."} · {entry.minPlayers}-{entry.maxPlayers} Spieler ·{" "}
-                              {entry.playingTime}
-                              {entry.isOwned ? " · bereits in Sammlung" : ""}
-                            </span>
-                          </div>
-                          <button
-                            className="button button-secondary"
-                            type="button"
-                            disabled={entry.isOwned}
-                            onClick={() => applyCatalogEntry(entry)}
-                          >
-                            Übernehmen
-                          </button>
-                        </article>
-                      ))}
-                      {catalogResults.length === 0 && (
-                        <p className="empty-hint">Kein Katalogtreffer. Du kannst manuell anlegen.</p>
-                      )}
-                    </div>
+              {catalogQuery.trim() && (
+                <div className="catalog-results">
+                  {catalogResults.map((entry) => (
+                    <article className="catalog-result" key={entry.id}>
+                      <div>
+                        <strong>{entry.name}</strong>
+                        <span>
+                          {entry.year ?? "o. J."} · {entry.minPlayers}-{entry.maxPlayers} Spieler ·{" "}
+                          {entry.playingTime}
+                          {entry.isOwned ? " · bereits in Sammlung" : ""}
+                        </span>
+                      </div>
+                      <button
+                        className="button button-secondary"
+                        type="button"
+                        disabled={entry.isOwned}
+                        onClick={() => applyCatalogEntry(entry)}
+                      >
+                        Übernehmen
+                      </button>
+                    </article>
+                  ))}
+                  {catalogResults.length === 0 && (
+                    <p className="empty-hint">Kein Katalogtreffer. Du kannst manuell anlegen.</p>
                   )}
-                </>
+                </div>
               )}
             </section>
           )}
@@ -464,7 +453,7 @@ export default function Games() {
                 <p className="eyebrow">Punktewertung</p>
                 <h3>Optionale Detailwertung anlegen.</h3>
                 <p className="scoring-panel-hint">
-                  Kategorien, Plus-/Minuspunkte und Multiplikatoren f\u00fcr dieses Spiel.
+                  Kategorien, Plus-/Minuspunkte und Multiplikatoren für dieses Spiel.
                 </p>
               </div>
               <button
@@ -478,9 +467,30 @@ export default function Games() {
 
             {isScoringEditorOpen && (
               <>
+                <div className="round-game-options">
+                  <label className="checkbox-field">
+                    <input
+                      checked={Boolean(form.isRoundGame)}
+                      type="checkbox"
+                      onChange={(event) => updateField("isRoundGame", event.target.checked)}
+                    />
+                    Rundenspiel aktivieren
+                  </label>
+                  {form.isRoundGame && (
+                    <Field label="Rundenwertung">
+                      <select
+                        value={form.roundScoringMode}
+                        onChange={(event) => updateField("roundScoringMode", event.target.value)}
+                      >
+                        <option value="plus">Rundenpunkte addieren</option>
+                        <option value="minus">Minuspunkte je Runde addieren</option>
+                      </select>
+                    </Field>
+                  )}
+                </div>
                 <div className="score-category-toolbar">
                   <button className="button button-secondary" type="button" onClick={addScoreCategory}>
-                    Kategorie hinzuf\u00fcgen
+                    Kategorie hinzufügen
                   </button>
                 </div>
                 <div className="score-category-list">
@@ -492,7 +502,7 @@ export default function Games() {
                           onChange={(event) =>
                             updateScoreCategory(category.id, "name", event.target.value)
                           }
-                          placeholder="z. B. St\u00e4dte, Karten, M\u00fcnzen"
+                          placeholder="z. B. Städte, Karten, Münzen"
                         />
                       </Field>
                       <Field label="Wertung">
@@ -535,6 +545,31 @@ export default function Games() {
           </button>
         </form>
       )}
+
+      <div className="collection-search">
+        <div className="play-scope-tabs collection-scope-tabs" aria-label="Sammlung filtern">
+          <button
+            className={gameScope === "all" ? "active" : ""}
+            type="button"
+            onClick={() => setGameScope("all")}
+          >
+            Alle Spiele
+          </button>
+          <button
+            className={gameScope === "mine" ? "active" : ""}
+            type="button"
+            onClick={() => setGameScope("mine")}
+          >
+            Eigene Spiele
+          </button>
+        </div>
+        <input
+          value={collectionQuery}
+          onChange={(event) => setCollectionQuery(event.target.value)}
+          placeholder="Spiel suchen"
+          aria-label="Sammlung nach Spiel durchsuchen"
+        />
+      </div>
 
       <div className="table-card collection-table-card">
         <table>
@@ -705,6 +740,36 @@ function sortGames(games, sortConfig) {
 
     return String(firstValue).localeCompare(String(secondValue), "de") * directionFactor;
   });
+}
+
+function filterGames(games, query) {
+  const normalizedQuery = query.trim().toLowerCase();
+
+  if (!normalizedQuery) {
+    return games;
+  }
+
+  return games.filter((game) =>
+    [
+      game.title,
+      game.category,
+      game.owner,
+      game.catalogYear,
+      ...(game.expansions ?? []),
+    ]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(normalizedQuery)),
+  );
+}
+
+function filterGamesByScope(games, scope, normalizedUsername) {
+  if (scope !== "mine") {
+    return games;
+  }
+
+  return games.filter(
+    (game) => normalizeName(game.ownerNormalized || game.owner) === normalizedUsername,
+  );
 }
 
 function getGameOwner(game) {

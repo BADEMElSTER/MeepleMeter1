@@ -80,6 +80,7 @@ function normalizeParticipants(participants = [], scoringMode = "none") {
       name: participant.name.trim(),
       score: scoringMode === "none" ? null : Number(participant.score) || 0,
       scoreDetails: participant.scoreDetails ?? {},
+      roundScores: participant.roundScores ?? {},
     }));
 }
 
@@ -118,6 +119,8 @@ function normalizeGame(game) {
     catalogExpansions: game.catalogExpansions ?? [],
     expansions: game.expansions ?? game.catalogExpansions ?? [],
     scoreCategories: normalizeScoreCategories(game.scoreCategories),
+    isRoundGame: Boolean(game.isRoundGame),
+    roundScoringMode: game.roundScoringMode === "minus" ? "minus" : "plus",
     owner: game.owner?.trim() ?? "",
     ownerNormalized: game.ownerNormalized ?? game.owner?.trim().toLowerCase() ?? "",
   };
@@ -145,6 +148,8 @@ function buildGame(gameInput, existingGame = {}) {
     catalogExpansions: gameInput.catalogExpansions ?? existingGame.catalogExpansions ?? [],
     expansions: parseExpansions(gameInput.expansions ?? existingGame.expansions ?? []),
     scoreCategories: normalizeScoreCategories(gameInput.scoreCategories ?? existingGame.scoreCategories),
+    isRoundGame: Boolean(gameInput.isRoundGame ?? existingGame.isRoundGame),
+    roundScoringMode: gameInput.roundScoringMode ?? existingGame.roundScoringMode ?? "plus",
     owner: gameInput.owner?.trim() || existingGame.owner || "",
     ownerNormalized:
       gameInput.owner?.trim().toLowerCase() ||
@@ -201,6 +206,8 @@ function buildPlay(playInput, games, existingPlay = {}) {
     players: participants.length || 1,
     scoringMode,
     participants,
+    useDetailedScoring: Boolean(playInput.useDetailedScoring),
+    roundCompleted: playInput.roundCompleted ?? existingPlay.roundCompleted ?? {},
     winner: calculateWinner(participants, scoringMode, playInput.winner),
     duration: Number(playInput.duration) || selectedGame?.duration || 0,
     note: playInput.note.trim() || "Keine Notiz erfasst.",
@@ -370,7 +377,7 @@ export function AppDataProvider({ children }) {
       }
 
       wasAdded = true;
-      return [{ id: createId(), ...buildGame(gameInput) }, ...currentGames];
+      return [{ id: createId(), ...buildGame(gameInput), createdAt: new Date().toISOString() }, ...currentGames];
     });
 
     return wasAdded;
@@ -395,7 +402,7 @@ export function AppDataProvider({ children }) {
         existingBggIds.add(gameInput.bggId);
       }
 
-      nextGames.push({ id: createId(), ...buildGame(gameInput) });
+      nextGames.push({ id: createId(), ...buildGame(gameInput), createdAt: new Date().toISOString() });
     }
 
     if (shouldUseFirestore && nextGames.length) {
@@ -488,6 +495,7 @@ export function AppDataProvider({ children }) {
     const play = {
       id: createId(),
       ...buildPlay(playInput, games),
+      createdAt: new Date().toISOString(),
     };
 
     if (shouldUseFirestore) {
@@ -502,6 +510,7 @@ export function AppDataProvider({ children }) {
     const nextPlays = playInputs.map((playInput) => ({
       id: createId(),
       ...buildPlay(playInput, games),
+      createdAt: new Date().toISOString(),
     }));
 
     if (shouldUseFirestore) {

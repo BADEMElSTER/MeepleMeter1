@@ -4,17 +4,23 @@ import { useAuth } from "../auth/AuthContext.jsx";
 import { useAppData } from "../data/AppDataContext.jsx";
 
 export default function Profile() {
-  const { changePassword, hasUsername, isAuthLoading, updateProfile, user, userProfile } =
-    useAuth();
+  const {
+    changeEmail,
+    changePassword,
+    hasUsername,
+    isAuthLoading,
+    updateProfile,
+    user,
+    userProfile,
+  } = useAuth();
   const { plays, renamePlayer } = useAppData();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const claimedUsername = searchParams.get("claim")?.trim() ?? "";
-  const [formData, setFormData] = useState({
-    username: "",
-    favoriteGame: "",
-    notes: "",
-  });
+  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
+  const [isEditingUsername, setIsEditingUsername] = useState(false);
+  const [isEditingEmail, setIsEditingEmail] = useState(false);
   const [passwordData, setPasswordData] = useState({
     newPassword: "",
     confirmPassword: "",
@@ -23,12 +29,10 @@ export default function Profile() {
   const [passwordStatus, setPasswordStatus] = useState("");
 
   useEffect(() => {
-    setFormData({
-      username: userProfile?.username ?? userProfile?.displayName ?? claimedUsername,
-      favoriteGame: userProfile?.favoriteGame ?? "",
-      notes: userProfile?.notes ?? "",
-    });
-  }, [claimedUsername, userProfile]);
+    setUsername(userProfile?.username ?? userProfile?.displayName ?? claimedUsername);
+    setEmail(user?.email ?? userProfile?.email ?? "");
+    setIsEditingUsername(!hasUsername);
+  }, [claimedUsername, hasUsername, user, userProfile]);
 
   if (isAuthLoading) {
     return (
@@ -42,12 +46,65 @@ export default function Profile() {
     return <Navigate to="/login" replace />;
   }
 
-  function handleChange(event) {
-    const { name, value } = event.target;
-    setFormData((currentData) => ({
-      ...currentData,
-      [name]: value,
-    }));
+  async function handleUsernameSubmit(event) {
+    event.preventDefault();
+    setStatus("");
+
+    const nextUsername = username.trim();
+    const nextUsernameNormalized = nextUsername.toLowerCase();
+    const currentUsername = (userProfile?.username || userProfile?.displayName || "")
+      .trim()
+      .toLowerCase();
+    const participantNames = getParticipantNames(plays);
+    const claimedUsernameNormalized = claimedUsername.trim().toLowerCase();
+
+    if (!nextUsername) {
+      setStatus("Bitte gib einen Benutzernamen ein.");
+      return;
+    }
+
+    if (
+      nextUsernameNormalized !== currentUsername &&
+      nextUsernameNormalized !== claimedUsernameNormalized &&
+      participantNames.has(nextUsernameNormalized)
+    ) {
+      setStatus(
+        "Dieser Name existiert bereits als Mitspieler. Wähle bitte einen anderen Benutzernamen.",
+      );
+      return;
+    }
+
+    try {
+      await updateProfile({ username: nextUsername, favoriteGame: "", notes: "" });
+      if (currentUsername && currentUsername !== nextUsernameNormalized) {
+        renamePlayer(currentUsername, nextUsername);
+      }
+      setIsEditingUsername(false);
+      setStatus("Benutzername gespeichert.");
+      if (!hasUsername) {
+        navigate("/dashboard");
+      }
+    } catch (error) {
+      setStatus(error.message);
+    }
+  }
+
+  async function handleEmailSubmit(event) {
+    event.preventDefault();
+    setStatus("");
+
+    try {
+      await changeEmail(email);
+      setIsEditingEmail(false);
+      setStatus("E-Mail gespeichert.");
+    } catch (error) {
+      if (error.code === "auth/requires-recent-login") {
+        setStatus("Bitte melde dich neu an und ändere danach die E-Mail-Adresse.");
+        return;
+      }
+
+      setStatus(error.message);
+    }
   }
 
   function handlePasswordChange(event) {
@@ -56,46 +113,6 @@ export default function Profile() {
       ...currentData,
       [name]: value,
     }));
-  }
-
-  async function handleSubmit(event) {
-    event.preventDefault();
-    setStatus("");
-
-    const nextUsername = formData.username.trim().toLowerCase();
-    const currentUsername = (
-      userProfile?.username ||
-      userProfile?.displayName ||
-      ""
-    )
-      .trim()
-      .toLowerCase();
-    const participantNames = getParticipantNames(plays);
-    const claimedUsernameNormalized = claimedUsername.trim().toLowerCase();
-
-    if (
-      nextUsername !== currentUsername &&
-      nextUsername !== claimedUsernameNormalized &&
-      participantNames.has(nextUsername)
-    ) {
-      setStatus(
-        "Dieser Name existiert bereits als Mitspieler. W\u00e4hle bitte einen anderen Benutzernamen.",
-      );
-      return;
-    }
-
-    try {
-      await updateProfile(formData);
-      if (currentUsername && currentUsername !== nextUsername) {
-        renamePlayer(currentUsername, formData.username);
-      }
-      setStatus("Profil gespeichert.");
-      if (!hasUsername) {
-        navigate("/dashboard");
-      }
-    } catch (error) {
-      setStatus(error.message);
-    }
   }
 
   async function handlePasswordSubmit(event) {
@@ -131,59 +148,51 @@ export default function Profile() {
       <div className="page-heading">
         <p className="eyebrow">{hasUsername ? "Profil" : "Erster Login"}</p>
         <h1>{hasUsername ? "Dein Profil." : "Benutzernamen wählen."}</h1>
-        <p className="page-intro">
-          {hasUsername
-            ? "Verwalte deine persönlichen Angaben. Der Benutzername darf keine vorhandenen Nutzer oder Mitspieler übernehmen."
-            : "Bitte wähle zuerst deinen Benutzernamen. Danach kannst du MeepleMeter normal nutzen."}
-        </p>
       </div>
 
-      <form className="entry-form profile-form" onSubmit={handleSubmit}>
-        <label>
-          Benutzername
+      <div className="entry-form profile-form">
+        <ProfileRow
+          isEditing={isEditingUsername}
+          label="Benutzername"
+          value={userProfile?.username || userProfile?.displayName || "Noch nicht gesetzt"}
+          onCancel={() => {
+            setUsername(userProfile?.username ?? userProfile?.displayName ?? claimedUsername);
+            setIsEditingUsername(!hasUsername);
+          }}
+          onEdit={() => setIsEditingUsername(true)}
+          onSubmit={handleUsernameSubmit}
+        >
           <input
             required
             minLength="2"
-            name="username"
             type="text"
-            value={formData.username}
-            onChange={handleChange}
-            placeholder="z. B. Basti"
+            value={username}
+            onChange={(event) => setUsername(event.target.value)}
+            disabled={Boolean(claimedUsername)}
           />
-        </label>
+        </ProfileRow>
 
-        <label>
-          Lieblingsspiel
+        <ProfileRow
+          isEditing={isEditingEmail}
+          label="E-Mail"
+          value={user.email}
+          onCancel={() => {
+            setEmail(user.email ?? userProfile?.email ?? "");
+            setIsEditingEmail(false);
+          }}
+          onEdit={() => setIsEditingEmail(true)}
+          onSubmit={handleEmailSubmit}
+        >
           <input
-            name="favoriteGame"
-            type="text"
-            value={formData.favoriteGame}
-            onChange={handleChange}
-            placeholder="z. B. Arche Nova"
+            required
+            type="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
           />
-        </label>
-
-        <label>
-          Notizen optional
-          <textarea
-            name="notes"
-            value={formData.notes}
-            onChange={handleChange}
-            placeholder="z. B. bevorzugte Spielarten oder Besonderheiten"
-          />
-        </label>
-
-        <div className="profile-meta">
-          <span>E-Mail</span>
-          <strong>{user.email}</strong>
-        </div>
+        </ProfileRow>
 
         {status && <p className="form-status">{status}</p>}
-
-        <button className="button" type="submit">
-          Profil speichern
-        </button>
-      </form>
+      </div>
 
       <form className="entry-form profile-form password-form" onSubmit={handlePasswordSubmit}>
         <div>
@@ -203,7 +212,6 @@ export default function Profile() {
             type="password"
             value={passwordData.newPassword}
             onChange={handlePasswordChange}
-            placeholder="••••••••"
           />
         </label>
 
@@ -216,7 +224,6 @@ export default function Profile() {
             type="password"
             value={passwordData.confirmPassword}
             onChange={handlePasswordChange}
-            placeholder="••••••••"
           />
         </label>
 
@@ -227,6 +234,36 @@ export default function Profile() {
         </button>
       </form>
     </section>
+  );
+}
+
+function ProfileRow({ children, isEditing, label, onCancel, onEdit, onSubmit, value }) {
+  return (
+    <div className="profile-row">
+      <div>
+        <span>{label}</span>
+        {isEditing ? (
+          <form className="profile-inline-form" onSubmit={onSubmit}>
+            {children}
+            <div className="profile-row-actions">
+              <button className="button button-secondary" type="submit">
+                Speichern
+              </button>
+              <button className="ghost-button" type="button" onClick={onCancel}>
+                Abbrechen
+              </button>
+            </div>
+          </form>
+        ) : (
+          <strong>{value}</strong>
+        )}
+      </div>
+      {!isEditing && (
+        <button className="ghost-button" type="button" onClick={onEdit}>
+          Ändern
+        </button>
+      )}
+    </div>
   );
 }
 
