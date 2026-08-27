@@ -1933,6 +1933,46 @@ th {
   border-radius: 0.7rem;
 }
 
+.round-score-matrix th:not(:first-child),
+.round-score-matrix td {
+  text-align: center;
+}
+
+.round-score-matrix input {
+  text-align: center;
+}
+
+.round-score-input-wrap {
+  position: relative;
+  display: block;
+}
+
+.round-winner-trophy {
+  position: absolute;
+  left: 0.55rem;
+  top: 50%;
+  z-index: 1;
+  transform: translateY(-50%);
+  margin: 0;
+  pointer-events: none;
+}
+
+.round-winner-cell input {
+  border-color: rgba(22, 163, 74, 0.55);
+  background: #e8f7ed;
+  font-weight: 900;
+}
+
+.round-score-matrix .round-block-start th,
+.round-score-matrix .round-block-start td {
+  border-top: 3px solid rgba(239, 84, 37, 0.38);
+}
+
+.add-round-block-button {
+  justify-self: center;
+  margin: 0 0.75rem 0.75rem;
+}
+
 .score-detail-matrix input[type="checkbox"] {
   width: 1.15rem;
   min-width: 1.15rem;

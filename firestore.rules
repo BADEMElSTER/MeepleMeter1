@@ -16,6 +16,32 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/groups/$(groupId)/members/$(request.auth.uid)).data.role == "admin";
     }
 
+    function currentMember(groupId) {
+      return get(/databases/$(database)/documents/groups/$(groupId)/members/$(request.auth.uid)).data;
+    }
+
+    function isGlobalAdmin() {
+      return signedIn()
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin";
+    }
+
+    function ownsGame(groupId) {
+      return isGroupMember(groupId)
+        && (
+          resource.data.owner == currentMember(groupId).username
+          || resource.data.ownerNormalized == currentMember(groupId).usernameNormalized
+        );
+    }
+
+    function ownsPlayGame(groupId) {
+      return isGroupMember(groupId)
+        && exists(/databases/$(database)/documents/groups/$(groupId)/games/$(resource.data.gameId))
+        && (
+          get(/databases/$(database)/documents/groups/$(groupId)/games/$(resource.data.gameId)).data.owner == currentMember(groupId).username
+          || get(/databases/$(database)/documents/groups/$(groupId)/games/$(resource.data.gameId)).data.ownerNormalized == currentMember(groupId).usernameNormalized
+        );
+    }
+
     match /users/{userId} {
       allow read, update: if signedIn() && request.auth.uid == userId;
       allow create: if signedIn() && request.auth.uid == userId;
@@ -46,13 +72,13 @@ service cloud.firestore {
       match /games/{gameId} {
         allow read: if isGroupMember(groupId);
         allow create, update: if isGroupMember(groupId);
-        allow delete: if isGroupAdmin(groupId);
+        allow delete: if isGroupAdmin(groupId) || ownsGame(groupId);
       }
 
       match /plays/{playId} {
         allow read: if isGroupMember(groupId);
         allow create, update: if isGroupMember(groupId);
-        allow delete: if isGroupAdmin(groupId);
+        allow delete: if isGroupAdmin(groupId) || ownsPlayGame(groupId);
       }
 
       match /playerProfiles/{playerId} {
@@ -64,7 +90,7 @@ service cloud.firestore {
 
     match /gameCatalog/{catalogGameId} {
       allow read: if signedIn();
-      allow write: if false;
+      allow create, update, delete: if isGlobalAdmin();
     }
   }
 }

@@ -196,6 +196,8 @@ function InfoTab({ game }) {
     <article className="panel">
       <h2>Allgemeine Spielinformationen</h2>
       <div className="list">
+        {game.germanTitle && <InfoRow label="Deutscher Titel" value={game.germanTitle} />}
+        {game.germanTitle && <InfoRow label="Originaltitel" value={game.catalogOriginalTitle || game.title} />}
         <InfoRow label="Kategorie" value={game.category} />
         <InfoRow label="Spielerzahl" value={`${game.minPlayers}–${game.maxPlayers}`} />
         <InfoRow label="Vorgegebene Spielzeit" value={formatMinutes(game.duration)} />

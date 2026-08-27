@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import Field from "../components/Field.jsx";
 import GameLink from "../components/GameLink.jsx";
 import PlayerLink from "../components/PlayerLink.jsx";
@@ -14,11 +14,15 @@ function getScoringLabel(scoringMode) {
     return "Niedrigste Punktzahl gewinnt";
   }
 
+  if (scoringMode === "placement") {
+    return "Platzierung eingeben";
+  }
+
   if (scoringMode === "none") {
     return "Keine Punkte";
   }
 
-  return "Höchste Punktzahl gewinnt";
+  return "HÃ¶chste Punktzahl gewinnt";
 }
 
 export default function Plays() {
@@ -56,12 +60,15 @@ export default function Plays() {
   const visiblePlays = playScope === "mine" ? ownPlays : plays;
 
   function getInitialForm(playerNames = knownPlayerNames, availableGames = games) {
+    const defaultGame = availableGames[0];
+
     return {
-      gameId: availableGames[0]?.id ?? "",
+      gameId: defaultGame?.id ?? "",
       date: getToday(),
-      scoringMode: "high",
+      scoringMode: defaultGame?.defaultScoringMode ?? "high",
       participants: playerNames.slice(0, 2).map((name) => ({ name, score: "" })),
       useDetailedScoring: false,
+      roundCount: 0,
       roundCompleted: {},
       winner: "",
       duration: "",
@@ -127,6 +134,18 @@ export default function Plays() {
     }));
   }
 
+  function updateSelectedGame(gameId) {
+    const nextGame = games.find((game) => game.id === gameId);
+
+    setForm((currentForm) => ({
+      ...currentForm,
+      gameId,
+      scoringMode: nextGame?.defaultScoringMode ?? "high",
+      useDetailedScoring: false,
+      roundCount: 0,
+    }));
+  }
+
   function updateParticipantRoundScore(name, roundIndex, value) {
     setFormError("");
     setForm((currentForm) => ({
@@ -154,6 +173,19 @@ export default function Plays() {
           : participant,
       ),
     }));
+  }
+
+  function addRoundBlock() {
+    setFormError("");
+    setForm((currentForm) => {
+      const playerCount = Math.max(currentForm.participants.length, 1);
+      const currentRoundCount = Math.max(currentForm.roundCount || 0, playerCount);
+
+      return {
+        ...currentForm,
+        roundCount: currentRoundCount + playerCount,
+      };
+    });
   }
 
   function toggleRoundCompleted(roundIndex) {
@@ -206,6 +238,7 @@ export default function Plays() {
             }))
           : [{ name: play.winner ?? "Spieler 1", score: "" }],
       useDetailedScoring: Boolean(play.useDetailedScoring),
+      roundCount: play.roundCount ?? getStoredRoundCount(play.participants),
       roundCompleted: play.roundCompleted ?? {},
       winner: play.winner ?? "",
       duration: String(play.duration ?? ""),
@@ -227,7 +260,7 @@ export default function Plays() {
     event.preventDefault();
 
     if (!form.gameId || !form.participants.length) {
-      setFormError("Bitte wähle mindestens einen Mitspieler aus.");
+      setFormError("Bitte wÃ¤hle mindestens einen Mitspieler aus.");
       return;
     }
 
@@ -237,7 +270,11 @@ export default function Plays() {
             ...form,
             participants: form.participants.map((participant) => ({
               ...participant,
-              score: calculateDetailedScore(participant, scoreCategories, form.participants.length),
+              score: calculateDetailedScore(
+                participant,
+                scoreCategories,
+                form.roundCount || form.participants.length,
+              ),
             })),
           }
         : form;
@@ -257,7 +294,7 @@ export default function Plays() {
   }
 
   function handleDelete(play) {
-    const confirmed = window.confirm(`Partie "${play.game}" vom ${new Date(play.date).toLocaleDateString("de-DE")} löschen?`);
+    const confirmed = window.confirm(`Partie "${play.game}" vom ${new Date(play.date).toLocaleDateString("de-DE")} lÃ¶schen?`);
 
     if (confirmed) {
       deletePlay(play.id);
@@ -297,12 +334,8 @@ export default function Plays() {
               <select
                 required
                 value={form.gameId}
-                onChange={(event) =>
-                  setForm((currentForm) => ({
-                    ...currentForm,
-                    gameId: event.target.value,
-                    useDetailedScoring: false,
-                  }))
+                  onChange={(event) =>
+                  updateSelectedGame(event.target.value)
                 }
               >
                 {games.map((game) => (
@@ -319,7 +352,7 @@ export default function Plays() {
                 onChange={(event) => updateField("date", event.target.value)}
               />
             </Field>
-            <Field label="Tatsächliche Spielzeit in Minuten">
+            <Field label="TatsÃ¤chliche Spielzeit in Minuten">
               <input
                 min="0"
                 type="number"
@@ -333,8 +366,9 @@ export default function Plays() {
                 value={form.scoringMode}
                 onChange={(event) => updateField("scoringMode", event.target.value)}
               >
-                <option value="high">Höchste Punktzahl gewinnt</option>
+                <option value="high">HÃ¶chste Punktzahl gewinnt</option>
                 <option value="low">Niedrigste Punktzahl gewinnt</option>
+                <option value="placement">Platzierung eingeben</option>
                 <option value="none">Keine Punkte</option>
               </select>
             </Field>
@@ -354,7 +388,7 @@ export default function Plays() {
                   type="checkbox"
                   onChange={(event) => updateField("useDetailedScoring", event.target.checked)}
                 />
-                Detaillierte Punktewertung für dieses Spiel nutzen
+                Detaillierte Punktewertung fÃ¼r dieses Spiel nutzen
               </label>
             )}
             <Field label="Notiz">
@@ -372,7 +406,7 @@ export default function Plays() {
                 <p className="eyebrow">Mitspieler</p>
                 <h3>Wer hat mitgespielt?</h3>
               </div>
-              <span>{form.participants.length} ausgewählt</span>
+              <span>{form.participants.length} ausgewÃ¤hlt</span>
             </div>
 
             <div className="participant-options">
@@ -395,7 +429,9 @@ export default function Plays() {
                         value={participant?.score ?? ""}
                         onChange={(event) => updateParticipantScore(name, event.target.value)}
                         readOnly={form.useDetailedScoring}
-                        placeholder={form.useDetailedScoring ? "Gesamt" : "Punkte"}
+                        placeholder={
+                          form.useDetailedScoring ? "Gesamt" : form.scoringMode === "placement" ? "Platz" : "Punkte"
+                        }
                       />
                     )}
                   </label>
@@ -432,7 +468,9 @@ export default function Plays() {
                             value={participant?.score ?? ""}
                             onChange={(event) => updateParticipantScore(name, event.target.value)}
                             readOnly={form.useDetailedScoring}
-                            placeholder={form.useDetailedScoring ? "Gesamt" : "Punkte"}
+                            placeholder={
+                              form.useDetailedScoring ? "Gesamt" : form.scoringMode === "placement" ? "Platz" : "Punkte"
+                            }
                           />
                         )}
                       </label>
@@ -458,7 +496,7 @@ export default function Plays() {
                 placeholder="Neuer Mitspieler"
               />
               <button className="button button-secondary" type="button" onClick={addPlayerName}>
-                Hinzufügen
+                HinzufÃ¼gen
               </button>
             </div>
 
@@ -467,18 +505,19 @@ export default function Plays() {
                 <div className="form-header">
                   <div>
                     <p className="eyebrow">Punktewertung</p>
-                    <h3>Detailpunkte erfassen.</h3>
                   </div>
-                  <span>{scoreCategories.length} Kategorien</span>
+                  {!isRoundGame && <span>{scoreCategories.length} Kategorien</span>}
                 </div>
 
                 <ScoreDetailMatrix
                   categories={scoreCategories}
                   participants={form.participants}
                   roundScoringMode={selectedGame?.roundScoringMode}
+                  roundCount={form.roundCount}
                   showRounds={isRoundGame}
                   onChange={updateParticipantScoreDetail}
                   onRoundChange={updateParticipantRoundScore}
+                  onAddRoundBlock={addRoundBlock}
                   onToggleRoundCompleted={toggleRoundCompleted}
                   roundCompleted={form.roundCompleted}
                 />
@@ -489,7 +528,7 @@ export default function Plays() {
           {formError && <p className="form-message form-message-error">{formError}</p>}
 
           <button className="button" type="submit">
-            {editingPlayId ? "Änderungen speichern" : "Partie speichern"}
+            {editingPlayId ? "Ã„nderungen speichern" : "Partie speichern"}
           </button>
         </form>
       )}
@@ -616,7 +655,7 @@ export default function Plays() {
           <article className="play-card compact-play-card empty-play-card">
             <p>
               {playScope === "mine"
-                ? "Für dich wurden noch keine Partien erfasst."
+                ? "FÃ¼r dich wurden noch keine Partien erfasst."
                 : "Es wurden noch keine Partien erfasst."}
             </p>
           </article>
@@ -637,6 +676,18 @@ function hasParticipant(play, normalizedUsername) {
   return play.participants?.some(
     (participant) => participant.name?.trim().toLowerCase() === normalizedUsername,
   );
+}
+
+function getStoredRoundCount(participants = []) {
+  const storedRounds = participants.reduce((maxRound, participant) => {
+    const roundIndexes = Object.keys(participant.roundScores ?? {})
+      .map((roundIndex) => Number(roundIndex))
+      .filter((roundIndex) => Number.isFinite(roundIndex));
+
+    return Math.max(maxRound, ...roundIndexes.map((roundIndex) => roundIndex + 1), 0);
+  }, 0);
+
+  return Math.max(storedRounds, participants.length);
 }
 
 function sortParticipantsByScore(participants, scoringMode) {
@@ -660,7 +711,9 @@ function sortParticipantsByScore(participants, scoringMode) {
       return -1;
     }
 
-    return scoringMode === "low" ? firstScore - secondScore : secondScore - firstScore;
+    return scoringMode === "low" || scoringMode === "placement"
+      ? firstScore - secondScore
+      : secondScore - firstScore;
   });
 }
 
@@ -682,17 +735,52 @@ function calculateDetailedScore(participant = {}, categories = [], roundCount = 
   return categoryScore + roundScore;
 }
 
+function getRoundWinnerNames(participants = [], roundIndex, roundScoringMode) {
+  const hasAnyRoundScore = participants.some(
+    (participant) => String(participant.roundScores?.[roundIndex] ?? "").trim() !== "",
+  );
+
+  if (!hasAnyRoundScore) {
+    return new Set();
+  }
+
+  const scoredParticipants = participants
+    .map((participant) => ({
+      name: participant.name,
+      score: Number(participant.roundScores?.[roundIndex] ?? 0),
+    }))
+    .filter((participant) => Number.isFinite(participant.score));
+
+  if (!scoredParticipants.length) {
+    return new Set();
+  }
+
+  const winningScore =
+    roundScoringMode === "minus"
+      ? Math.min(...scoredParticipants.map((participant) => participant.score))
+      : Math.max(...scoredParticipants.map((participant) => participant.score));
+
+  return new Set(
+    scoredParticipants
+      .filter((participant) => participant.score === winningScore)
+      .map((participant) => participant.name),
+  );
+}
+
 function ScoreDetailMatrix({
   categories,
   onChange,
+  onAddRoundBlock,
   onRoundChange,
-  onToggleRoundCompleted,
   participants,
-  roundCompleted = {},
+  roundCount = 0,
   roundScoringMode,
   showRounds,
 }) {
-  const roundIndexes = Array.from({ length: participants.length }, (_entry, index) => index);
+  const roundBlockSize = Math.max(participants.length, 1);
+  const visibleRoundCount = Math.max(Number(roundCount) || 0, roundBlockSize);
+  const roundIndexes = Array.from({ length: visibleRoundCount }, (_entry, index) => index);
+  const roundScoringLabel = roundScoringMode === "minus" ? "Minuspunkte" : "Punkte";
 
   return (
     <div className="score-detail-matrix-wrap">
@@ -733,58 +821,80 @@ function ScoreDetailMatrix({
         <table className="score-detail-matrix round-score-matrix">
           <thead>
             <tr>
-              <th>Runde</th>
+              <th>Spiel ({roundScoringLabel})</th>
               {participants.map((participant) => (
                 <th key={participant.name}>{participant.name}</th>
               ))}
-              <th>Fertig</th>
             </tr>
           </thead>
           <tbody>
-            {roundIndexes.map((roundIndex) => (
-              <tr key={`round-${roundIndex}`}>
-                <th>
-                  Runde {roundIndex + 1}
-                  {roundScoringMode === "minus" ? " · Minuspunkte" : ""}
-                </th>
-                {participants.map((participant) => (
-                  <td key={`${roundIndex}-${participant.name}`}>
-                    <input
-                      type="number"
-                      value={participant?.roundScores?.[roundIndex] ?? ""}
-                      onChange={(event) =>
-                        onRoundChange(participant.name, roundIndex, event.target.value)
-                      }
-                      placeholder="0"
-                    />
-                  </td>
-                ))}
-                <td>
-                  <input
-                    type="checkbox"
-                    checked={Boolean(roundCompleted?.[roundIndex])}
-                    onChange={() => onToggleRoundCompleted(roundIndex)}
-                    aria-label={`Runde ${roundIndex + 1} abgeschlossen`}
-                  />
-                </td>
-              </tr>
-            ))}
+            {roundIndexes.map((roundIndex) => {
+              const roundWinnerNames = getRoundWinnerNames(participants, roundIndex, roundScoringMode);
+
+              return (
+                <tr
+                  className={roundIndex > 0 && roundIndex % roundBlockSize === 0 ? "round-block-start" : ""}
+                  key={`round-${roundIndex}`}
+                >
+                  <th>Spiel {roundIndex + 1}</th>
+                  {participants.map((participant) => {
+                    const isRoundWinner = roundWinnerNames.has(participant.name);
+
+                    return (
+                      <td className={isRoundWinner ? "round-winner-cell" : ""} key={`${roundIndex}-${participant.name}`}>
+                        <span className="round-score-input-wrap">
+                          {isRoundWinner && (
+                            <span className="winner-trophy round-winner-trophy" aria-label="Gewinner" title="Gewinner" />
+                          )}
+                          <input
+                            type="number"
+                            value={participant?.roundScores?.[roundIndex] ?? ""}
+                            onChange={(event) =>
+                              onRoundChange(participant.name, roundIndex, event.target.value)
+                            }
+                            placeholder="0"
+                          />
+                        </span>
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
           </tbody>
+          <tfoot>
+            <tr>
+              <th>Gesamtpunkte</th>
+              {participants.map((participant) => (
+                <td key={`total-${participant.name}`}>
+                  <strong>{calculateDetailedScore(participant, categories, visibleRoundCount)}</strong>
+                </td>
+              ))}
+            </tr>
+          </tfoot>
         </table>
       )}
 
-      <table className="score-detail-matrix">
-        <tfoot>
-          <tr>
-            <th>Gesamtpunkte</th>
-            {participants.map((participant) => (
-              <td key={`total-${participant.name}`}>
-                <strong>{calculateDetailedScore(participant, categories, participants.length)}</strong>
-              </td>
-            ))}
-          </tr>
-        </tfoot>
-      </table>
+      {showRounds && (
+        <button className="button button-secondary add-round-block-button" type="button" onClick={onAddRoundBlock}>
+          Runde hinzufügen
+        </button>
+      )}
+
+      {!showRounds && (
+        <table className="score-detail-matrix">
+          <tfoot>
+            <tr>
+              <th>Gesamtpunkte</th>
+              {participants.map((participant) => (
+                <td key={`total-${participant.name}`}>
+                  <strong>{calculateDetailedScore(participant, categories, participants.length)}</strong>
+                </td>
+              ))}
+            </tr>
+          </tfoot>
+        </table>
+      )}
     </div>
   );
 }
@@ -872,4 +982,5 @@ function sortSelectablePlayerNames(playerNames, selectedParticipants, plays, pre
     );
   });
 }
+
 

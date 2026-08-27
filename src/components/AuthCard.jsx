@@ -42,7 +42,7 @@ export default function AuthCard({ mode }) {
 
       navigate("/dashboard");
     } catch (error) {
-      setMessage(error.message);
+      setMessage(getAuthErrorMessage(error));
     } finally {
       setIsSubmitting(false);
     }
@@ -132,4 +132,20 @@ export default function AuthCard({ mode }) {
       </section>
     </main>
   );
+}
+
+function getAuthErrorMessage(error) {
+  switch (error.code) {
+    case "auth/invalid-credential":
+    case "auth/wrong-password":
+      return "E-Mail, Benutzername oder Passwort ist falsch.";
+    case "auth/user-not-found":
+      return "F?r diese E-Mail oder diesen Benutzernamen wurde kein Konto gefunden.";
+    case "auth/too-many-requests":
+      return "Zu viele fehlgeschlagene Login-Versuche. Bitte sp?ter erneut versuchen oder Passwort zur?cksetzen.";
+    case "auth/invalid-email":
+      return "Bitte gib eine g?ltige E-Mail-Adresse oder einen Benutzernamen ein.";
+    default:
+      return error.message || "Anmeldung fehlgeschlagen.";
+  }
 }

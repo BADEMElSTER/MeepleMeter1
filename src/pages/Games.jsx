@@ -3,7 +3,6 @@ import Field from "../components/Field.jsx";
 import GameLink from "../components/GameLink.jsx";
 import { useAuth } from "../auth/AuthContext.jsx";
 import { useAppData } from "../data/AppDataContext.jsx";
-import { gameCatalog } from "../data/gameCatalog.js";
 
 const initialForm = {
   title: "",
@@ -14,12 +13,15 @@ const initialForm = {
   duration: "",
   bggId: null,
   catalogId: null,
+  catalogOriginalTitle: null,
   catalogYear: "",
   catalogRank: null,
   catalogRating: null,
   catalogImage: null,
   catalogExpansions: [],
+  germanTitle: "",
   expansions: "",
+  defaultScoringMode: "high",
   scoreCategories: [],
   isRoundGame: false,
   roundScoringMode: "plus",
@@ -66,12 +68,15 @@ function getGameForm(game) {
     duration: String(game.duration),
     bggId: game.bggId ?? null,
     catalogId: game.catalogId ?? null,
+    catalogOriginalTitle: game.catalogOriginalTitle ?? null,
     catalogYear: game.catalogYear ? String(game.catalogYear) : "",
     catalogRank: game.catalogRank ?? null,
     catalogRating: game.catalogRating ?? null,
     catalogImage: game.catalogImage ?? null,
     catalogExpansions: game.catalogExpansions ?? [],
+    germanTitle: game.germanTitle ?? "",
     expansions: (game.expansions ?? []).map((expansion) => expansion.name).join(", "),
+    defaultScoringMode: game.defaultScoringMode ?? "high",
     scoreCategories: game.scoreCategories ?? [],
     isRoundGame: Boolean(game.isRoundGame),
     roundScoringMode: game.roundScoringMode ?? "plus",
@@ -89,7 +94,7 @@ function createScoreCategory() {
 
 export default function Games() {
   const { user, userProfile } = useAuth();
-  const { stats, playerProfiles, addGame, updateGame, deleteGame } = useAppData();
+  const { stats, playerProfiles, gameCatalog, addGame, updateGame, deleteGame } = useAppData();
   const username = getCurrentPlayerName(user, userProfile, playerProfiles);
   const normalizedUsername = normalizeName(username);
   const [sortConfig, setSortConfig] = useState({ key: "title", direction: "asc" });
@@ -105,7 +110,7 @@ export default function Games() {
   const formRef = useRef(null);
   const ownDataRef = useRef(null);
   const titleInputRef = useRef(null);
-  const catalogResults = getCatalogResults(catalogQuery, stats.gamesWithPlayCounts);
+  const catalogResults = getCatalogResults(catalogQuery, stats.gamesWithPlayCounts, gameCatalog);
   const scopedGames = filterGamesByScope(allGames, gameScope, normalizedUsername);
   const games = filterGames(scopedGames, collectionQuery);
   const categorySelectValue = commonCategories.includes(form.category)
@@ -163,9 +168,11 @@ export default function Games() {
   }
 
   function applyCatalogEntry(entry) {
+    const displayTitle = getCatalogDisplayTitle(entry);
+
     setForm({
       ...initialForm,
-      title: entry.name,
+      title: displayTitle,
       category: "Katalogspiel",
       owner: username,
       minPlayers: String(entry.minPlayers ?? 1),
@@ -173,12 +180,15 @@ export default function Games() {
       duration: String(entry.maxPlayTime ?? entry.minPlayTime ?? 0),
       bggId: entry.bggId,
       catalogId: entry.id,
+      catalogOriginalTitle: entry.name,
       catalogYear: entry.year ? String(entry.year) : "",
       catalogRank: entry.rank,
       catalogRating: entry.rating,
       catalogImage: entry.image,
       catalogExpansions: entry.expansions ?? [],
+      germanTitle: entry.germanTitle ?? "",
       expansions: (entry.expansions ?? []).map((expansion) => expansion.name).join(", "),
+      defaultScoringMode: "high",
       scoreCategories: [],
       isRoundGame: false,
       roundScoringMode: "plus",
@@ -188,7 +198,7 @@ export default function Games() {
       ownDataRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
       titleInputRef.current?.focus({ preventScroll: true });
     }, 0);
-    setFormMessage(`Katalogdaten für "${entry.name}" übernommen. Bitte prüfen und speichern.`);
+    setFormMessage(`Katalogdaten für "${displayTitle}" übernommen. Bitte prüfen und speichern.`);
   }
 
   function updateCategorySelection(value) {
@@ -335,8 +345,9 @@ export default function Games() {
                   {catalogResults.map((entry) => (
                     <article className="catalog-result" key={entry.id}>
                       <div>
-                        <strong>{entry.name}</strong>
+                        <strong>{getCatalogDisplayTitle(entry)}</strong>
                         <span>
+                          {entry.germanTitle ? `${entry.name} · ` : ""}
                           {entry.year ?? "o. J."} · {entry.minPlayers}-{entry.maxPlayers} Spieler ·{" "}
                           {entry.playingTime}
                           {entry.isOwned ? " · bereits in Sammlung" : ""}
@@ -438,6 +449,17 @@ export default function Games() {
                 placeholder="60"
               />
             </Field>
+            <Field label="Standard-Wertung">
+              <select
+                value={form.defaultScoringMode}
+                onChange={(event) => updateField("defaultScoringMode", event.target.value)}
+              >
+                <option value="high">Höchste Punktzahl gewinnt</option>
+                <option value="low">Niedrigste Punktzahl gewinnt</option>
+                <option value="placement">Platzierung eingeben</option>
+                <option value="none">Keine Punkte</option>
+              </select>
+            </Field>
             <Field label="Erweiterungen optional">
               <textarea
                 value={form.expansions}
@@ -488,55 +510,59 @@ export default function Games() {
                     </Field>
                   )}
                 </div>
-                <div className="score-category-toolbar">
-                  <button className="button button-secondary" type="button" onClick={addScoreCategory}>
-                    Kategorie hinzufügen
-                  </button>
-                </div>
-                <div className="score-category-list">
-                  {(form.scoreCategories ?? []).map((category) => (
-                    <div className="score-category-row" key={category.id}>
-                      <Field label="Kategorie">
-                        <input
-                          value={category.name}
-                          onChange={(event) =>
-                            updateScoreCategory(category.id, "name", event.target.value)
-                          }
-                          placeholder="z. B. Städte, Karten, Münzen"
-                        />
-                      </Field>
-                      <Field label="Wertung">
-                        <select
-                          value={category.type}
-                          onChange={(event) =>
-                            updateScoreCategory(category.id, "type", event.target.value)
-                          }
-                        >
-                          <option value="plus">Pluspunkte</option>
-                          <option value="minus">Minuspunkte</option>
-                        </select>
-                      </Field>
-                      <Field label="Multiplikator">
-                        <input
-                          min="0"
-                          step="0.5"
-                          type="number"
-                          value={category.multiplier}
-                          onChange={(event) =>
-                            updateScoreCategory(category.id, "multiplier", event.target.value)
-                          }
-                        />
-                      </Field>
-                      <button
-                        className="ghost-button danger-action score-category-delete"
-                        type="button"
-                        onClick={() => removeScoreCategory(category.id)}
-                      >
-                        Entfernen
+                {!form.isRoundGame && (
+                  <>
+                    <div className="score-category-toolbar">
+                      <button className="button button-secondary" type="button" onClick={addScoreCategory}>
+                        Kategorie hinzufügen
                       </button>
                     </div>
-                  ))}
-                </div>
+                    <div className="score-category-list">
+                      {(form.scoreCategories ?? []).map((category) => (
+                        <div className="score-category-row" key={category.id}>
+                          <Field label="Kategorie">
+                            <input
+                              value={category.name}
+                              onChange={(event) =>
+                                updateScoreCategory(category.id, "name", event.target.value)
+                              }
+                              placeholder="z. B. Städte, Karten, Münzen"
+                            />
+                          </Field>
+                          <Field label="Wertung">
+                            <select
+                              value={category.type}
+                              onChange={(event) =>
+                                updateScoreCategory(category.id, "type", event.target.value)
+                              }
+                            >
+                              <option value="plus">Pluspunkte</option>
+                              <option value="minus">Minuspunkte</option>
+                            </select>
+                          </Field>
+                          <Field label="Multiplikator">
+                            <input
+                              min="0"
+                              step="0.5"
+                              type="number"
+                              value={category.multiplier}
+                              onChange={(event) =>
+                                updateScoreCategory(category.id, "multiplier", event.target.value)
+                              }
+                            />
+                          </Field>
+                          <button
+                            className="ghost-button danger-action score-category-delete"
+                            type="button"
+                            onClick={() => removeScoreCategory(category.id)}
+                          >
+                            Entfernen
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
               </>
             )}
           </section>
@@ -821,7 +847,7 @@ function canDeleteGame(game, normalizedUsername) {
   return owner === normalizedUsername;
 }
 
-function getCatalogResults(query, existingGames) {
+function getCatalogResults(query, existingGames, gameCatalog) {
   const normalizedQuery = query.trim().toLowerCase();
 
   if (!normalizedQuery) {
@@ -832,6 +858,7 @@ function getCatalogResults(query, existingGames) {
     .filter((entry) => {
       const searchableText = [
         entry.name,
+        entry.germanTitle,
         entry.aliases?.join(" "),
         entry.year,
         entry.bggId,
@@ -849,8 +876,13 @@ function getCatalogResults(query, existingGames) {
       isOwned: existingGames.some(
         (game) =>
           (entry.bggId && game.bggId === entry.bggId) ||
+          game.title.trim().toLowerCase() === getCatalogDisplayTitle(entry).trim().toLowerCase() ||
           game.title.trim().toLowerCase() === entry.name.trim().toLowerCase(),
       ),
     }));
+}
+
+function getCatalogDisplayTitle(entry) {
+  return entry.germanTitle?.trim() || entry.name;
 }
 

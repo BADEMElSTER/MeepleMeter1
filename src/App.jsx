@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import AppLayout from "./components/AppLayout.jsx";
 import Admin from "./pages/Admin.jsx";
+import AdminCatalog from "./pages/AdminCatalog.jsx";
 import AdminGames from "./pages/AdminGames.jsx";
 import AdminPlays from "./pages/AdminPlays.jsx";
 import AdminPlayers from "./pages/AdminPlayers.jsx";
@@ -36,6 +37,7 @@ export default function App() {
         <Route path="/admin/games" element={<AdminGames />} />
         <Route path="/admin/plays" element={<AdminPlays />} />
         <Route path="/admin/players" element={<AdminPlayers />} />
+        <Route path="/admin/catalog" element={<AdminCatalog />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

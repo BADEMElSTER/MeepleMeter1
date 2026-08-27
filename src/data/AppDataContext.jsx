@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+﻿import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import {
   collection,
   deleteDoc,
@@ -16,6 +16,7 @@ import {
   firestoreDb,
   isFirebaseConfigured,
 } from "../firebase/client.js";
+import { gameCatalog as initialGameCatalog } from "./gameCatalog.js";
 import { games as initialGames, plays as initialPlays } from "./mockData.js";
 
 const AppDataContext = createContext(null);
@@ -63,6 +64,14 @@ function groupDocRef(collectionName, documentId) {
   return doc(firestoreDb, "groups", firebaseGroupId, collectionName, documentId);
 }
 
+function catalogCollectionRef() {
+  return collection(firestoreDb, "gameCatalog");
+}
+
+function catalogDocRef(documentId) {
+  return doc(firestoreDb, "gameCatalog", documentId);
+}
+
 function getStoredDefaults() {
   const storedData = loadStoredData();
 
@@ -70,6 +79,7 @@ function getStoredDefaults() {
     games: (storedData?.games ?? initialGames).map(normalizeGame),
     plays: storedData?.plays ?? initialPlays,
     playerProfiles: (storedData?.playerProfiles ?? []).map(normalizePlayerProfile),
+    gameCatalog: (storedData?.gameCatalog ?? initialGameCatalog).map(normalizeCatalogGame),
   };
 }
 
@@ -94,10 +104,78 @@ function calculateWinner(participants, scoringMode, fallbackWinner = "") {
   }
 
   const sortedParticipants = [...participants].sort((first, second) =>
-    scoringMode === "low" ? first.score - second.score : second.score - first.score,
+    scoringMode === "low" || scoringMode === "placement"
+      ? first.score - second.score
+      : second.score - first.score,
   );
 
   return sortedParticipants[0]?.name ?? "Nicht erfasst";
+}
+
+
+function createCatalogId(game) {
+  const name = String(game.name ?? game.title ?? "spiel").trim().toLowerCase();
+  const slug = name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "") || "spiel";
+  const year = Number(game.year ?? game.catalogYear) || "ohne-jahr";
+  return game.bggId ? `bgg-${game.bggId}` : `${slug}-${year}`;
+}
+
+function formatPlayingTime(minPlayTime, maxPlayTime) {
+  if (!minPlayTime && !maxPlayTime) {
+    return "";
+  }
+
+  if (!maxPlayTime || minPlayTime === maxPlayTime) {
+    return `${minPlayTime || maxPlayTime} Min.`;
+  }
+
+  return `${minPlayTime}–${maxPlayTime} Min.`;
+}
+
+function normalizeCatalogExpansions(expansions) {
+  if (Array.isArray(expansions)) {
+    return expansions
+      .map((expansion) =>
+        typeof expansion === "string" ? { name: expansion.trim() } : { name: expansion.name?.trim() },
+      )
+      .filter((expansion) => expansion.name);
+  }
+
+  return String(expansions ?? "")
+    .split(/\n|,|\|/)
+    .map((name) => ({ name: name.trim() }))
+    .filter((expansion) => expansion.name);
+}
+
+function normalizeCatalogGame(game) {
+  const name = String(game.name ?? game.title ?? "").trim();
+  const minPlayers = Number(game.minPlayers ?? game.min_players) || 1;
+  const maxPlayers = Math.max(Number(game.maxPlayers ?? game.max_players) || minPlayers, minPlayers);
+  const minPlayTime = Number(game.minPlayTime ?? game.min_play_time ?? game.duration ?? game.playingTime) || 0;
+  const maxPlayTime = Number(game.maxPlayTime ?? game.max_play_time ?? game.duration ?? game.playingTime) || minPlayTime;
+  const bggId = game.bggId ?? game.bgg_id ?? null;
+  const explicitId = String(game.id ?? game.catalogId ?? "").trim();
+
+  return {
+    id: explicitId || createCatalogId({ ...game, bggId, name }),
+    bggId: bggId ? Number(bggId) || null : null,
+    name,
+    germanTitle: String(game.germanTitle ?? game.deutscherTitel ?? game.deTitle ?? "").trim(),
+    year: Number(game.year ?? game.catalogYear) || null,
+    minPlayers,
+    maxPlayers,
+    minPlayTime,
+    maxPlayTime,
+    playingTime: game.playingTime || formatPlayingTime(minPlayTime, maxPlayTime),
+    rank: game.rank ? Number(game.rank) || null : null,
+    rating: game.rating ? Number(game.rating) || null : null,
+    image: game.image || null,
+    expansions: normalizeCatalogExpansions(game.expansions),
+  };
 }
 
 function normalizeGame(game) {
@@ -108,16 +186,20 @@ function normalizeGame(game) {
     ...game,
     minPlayers,
     maxPlayers,
-    players: minPlayers === maxPlayers ? `${minPlayers}` : `${minPlayers}–${maxPlayers}`,
+    players: minPlayers === maxPlayers ? `${minPlayers}` : `${minPlayers}â€“${maxPlayers}`,
     duration: Number(game.duration) || 0,
     bggId: game.bggId ?? null,
     catalogId: game.catalogId ?? null,
+    catalogOriginalTitle: game.catalogOriginalTitle ?? game.name ?? null,
     catalogYear: game.catalogYear ?? null,
     catalogRank: game.catalogRank ?? null,
     catalogRating: game.catalogRating ?? null,
     catalogImage: game.catalogImage ?? null,
     catalogExpansions: game.catalogExpansions ?? [],
     expansions: game.expansions ?? game.catalogExpansions ?? [],
+    defaultScoringMode: ["high", "low", "placement", "none"].includes(game.defaultScoringMode)
+      ? game.defaultScoringMode
+      : "high",
     scoreCategories: normalizeScoreCategories(game.scoreCategories),
     isRoundGame: Boolean(game.isRoundGame),
     roundScoringMode: game.roundScoringMode === "minus" ? "minus" : "plus",
@@ -141,12 +223,17 @@ function buildGame(gameInput, existingGame = {}) {
     duration: Number(gameInput.duration) || 0,
     bggId: gameInput.bggId ?? existingGame.bggId ?? null,
     catalogId: gameInput.catalogId ?? existingGame.catalogId ?? null,
+    germanTitle: gameInput.germanTitle ?? existingGame.germanTitle ?? "",
+    catalogOriginalTitle: gameInput.catalogOriginalTitle ?? existingGame.catalogOriginalTitle ?? null,
     catalogYear,
     catalogRank: gameInput.catalogRank ?? existingGame.catalogRank ?? null,
     catalogRating: gameInput.catalogRating ?? existingGame.catalogRating ?? null,
     catalogImage: gameInput.catalogImage ?? existingGame.catalogImage ?? null,
     catalogExpansions: gameInput.catalogExpansions ?? existingGame.catalogExpansions ?? [],
     expansions: parseExpansions(gameInput.expansions ?? existingGame.expansions ?? []),
+    defaultScoringMode: ["high", "low", "placement", "none"].includes(gameInput.defaultScoringMode)
+      ? gameInput.defaultScoringMode
+      : existingGame.defaultScoringMode ?? "high",
     scoreCategories: normalizeScoreCategories(gameInput.scoreCategories ?? existingGame.scoreCategories),
     isRoundGame: Boolean(gameInput.isRoundGame ?? existingGame.isRoundGame),
     roundScoringMode: gameInput.roundScoringMode ?? existingGame.roundScoringMode ?? "plus",
@@ -223,8 +310,40 @@ function sortPlaysByGameDate(playList) {
       return secondTime - firstTime;
     }
 
+    const firstCreatedAt = getTimestampValue(first.createdAt ?? first.updatedAt);
+    const secondCreatedAt = getTimestampValue(second.createdAt ?? second.updatedAt);
+
+    if (secondCreatedAt !== firstCreatedAt) {
+      return secondCreatedAt - firstCreatedAt;
+    }
+
     return String(second.id ?? "").localeCompare(String(first.id ?? ""), "de");
   });
+}
+
+function getTimestampValue(timestamp) {
+  if (!timestamp) {
+    return 0;
+  }
+
+  if (typeof timestamp === "number") {
+    return timestamp;
+  }
+
+  if (typeof timestamp === "string") {
+    const parsedTime = new Date(timestamp).getTime();
+    return Number.isFinite(parsedTime) ? parsedTime : 0;
+  }
+
+  if (typeof timestamp.toMillis === "function") {
+    return timestamp.toMillis();
+  }
+
+  if (Number.isFinite(timestamp.seconds)) {
+    return timestamp.seconds * 1000 + Math.floor((timestamp.nanoseconds ?? 0) / 1000000);
+  }
+
+  return 0;
 }
 
 function normalizePlayerProfile(profile) {
@@ -247,13 +366,14 @@ export function AppDataProvider({ children }) {
   const [games, setGames] = useState(() => getStoredDefaults().games);
   const [plays, setPlays] = useState(() => getStoredDefaults().plays);
   const [playerProfiles, setPlayerProfiles] = useState(() => getStoredDefaults().playerProfiles);
+  const [gameCatalog, setGameCatalog] = useState(() => getStoredDefaults().gameCatalog);
   const [isDataLoading, setIsDataLoading] = useState(shouldUseFirestore);
 
   useEffect(() => {
     if (!shouldUseFirestore) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ games, plays, playerProfiles }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ games, plays, playerProfiles, gameCatalog }));
     }
-  }, [games, plays, playerProfiles, shouldUseFirestore]);
+  }, [games, plays, playerProfiles, gameCatalog, shouldUseFirestore]);
 
   useEffect(() => {
     if (!shouldUseFirestore) {
@@ -275,6 +395,12 @@ export function AppDataProvider({ children }) {
         setPlayerProfiles(
           snapshot.docs.map((entry) => normalizePlayerProfile({ name: entry.id, ...entry.data() })),
         );
+      }),
+      onSnapshot(catalogCollectionRef(), (snapshot) => {
+        const firestoreCatalog = snapshot.docs.map((entry) =>
+          normalizeCatalogGame({ id: entry.id, ...entry.data() }),
+        );
+        setGameCatalog(firestoreCatalog.length ? firestoreCatalog : initialGameCatalog.map(normalizeCatalogGame));
       }),
     ];
 
@@ -458,15 +584,78 @@ export function AppDataProvider({ children }) {
 
   function deleteGame(gameId) {
     if (shouldUseFirestore) {
-      deleteDoc(groupDocRef("games", gameId));
+      const batch = writeBatch(firestoreDb);
+
       plays
         .filter((play) => play.gameId === gameId)
-        .forEach((play) => deleteDoc(groupDocRef("plays", play.id)));
+        .forEach((play) => batch.delete(groupDocRef("plays", play.id)));
+      batch.delete(groupDocRef("games", gameId));
+      batch.commit();
       return;
     }
 
     setGames((currentGames) => currentGames.filter((game) => game.id !== gameId));
     setPlays((currentPlays) => currentPlays.filter((play) => play.gameId !== gameId));
+  }
+
+
+  async function addCatalogGames(catalogInputs) {
+    const existingKeys = new Set(
+      gameCatalog.map((game) => `${game.bggId || ""}|${normalizeTitle(game.name)}|${game.year || ""}`),
+    );
+    const nextCatalogGames = [];
+
+    for (const catalogInput of catalogInputs) {
+      const catalogGame = normalizeCatalogGame(catalogInput);
+      const key = `${catalogGame.bggId || ""}|${normalizeTitle(catalogGame.name)}|${catalogGame.year || ""}`;
+
+      if (!catalogGame.name || existingKeys.has(key)) {
+        continue;
+      }
+
+      existingKeys.add(key);
+      nextCatalogGames.push(catalogGame);
+    }
+
+    if (shouldUseFirestore && nextCatalogGames.length) {
+      const batch = writeBatch(firestoreDb);
+
+      nextCatalogGames.forEach((catalogGame) => {
+        batch.set(catalogDocRef(catalogGame.id), cleanForFirestore(catalogGame));
+      });
+
+      await batch.commit();
+      return nextCatalogGames.length;
+    }
+
+    if (nextCatalogGames.length) {
+      setGameCatalog((currentCatalog) => [...nextCatalogGames, ...currentCatalog]);
+    }
+
+    return nextCatalogGames.length;
+  }
+
+  function updateCatalogGame(catalogGameId, catalogInput) {
+    const existingCatalogGame = gameCatalog.find((game) => game.id === catalogGameId) ?? {};
+    const catalogGame = normalizeCatalogGame({ ...existingCatalogGame, ...catalogInput, id: catalogGameId });
+
+    if (shouldUseFirestore) {
+      setDoc(catalogDocRef(catalogGameId), cleanForFirestore(catalogGame), { merge: true });
+      return;
+    }
+
+    setGameCatalog((currentCatalog) =>
+      currentCatalog.map((game) => (game.id === catalogGameId ? catalogGame : game)),
+    );
+  }
+
+  function deleteCatalogGame(catalogGameId) {
+    if (shouldUseFirestore) {
+      deleteDoc(catalogDocRef(catalogGameId));
+      return;
+    }
+
+    setGameCatalog((currentCatalog) => currentCatalog.filter((game) => game.id !== catalogGameId));
   }
 
   function updateGameScoreCategories(gameId, scoreCategories) {
@@ -813,12 +1002,16 @@ export function AppDataProvider({ children }) {
       games,
       plays: sortedPlays,
       playerProfiles,
+      gameCatalog,
       stats,
       dataBackend: shouldUseFirestore ? "firestore" : "local",
       isDataLoading,
       addGame,
       addGames,
       updateGame,
+      addCatalogGames,
+      updateCatalogGame,
+      deleteCatalogGame,
       updateGameScoreCategories,
       deleteGame,
       addPlay,
@@ -831,7 +1024,7 @@ export function AppDataProvider({ children }) {
       resetLocalData,
       importLocalDataToFirestore,
     }),
-    [games, sortedPlays, playerProfiles, stats, shouldUseFirestore, isDataLoading],
+    [games, sortedPlays, playerProfiles, gameCatalog, stats, shouldUseFirestore, isDataLoading],
   );
 
   return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>;
@@ -846,4 +1039,5 @@ export function useAppData() {
 
   return context;
 }
+
 

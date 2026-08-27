@@ -362,6 +362,7 @@ async function ensureDefaultGroupMember(currentUser, profile) {
 
   if (username) {
     memberData.username = username;
+    memberData.usernameNormalized = username.toLowerCase();
   }
 
   await setDoc(

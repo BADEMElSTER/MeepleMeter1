@@ -9,11 +9,13 @@ const initialResetSelection = {
 };
 
 export default function Admin() {
-  const { games, plays, addGames, addPlays, resetLocalData } = useAppData();
+  const { games, plays, gameCatalog, addGames, addPlays, addCatalogGames, resetLocalData } = useAppData();
   const [importMessage, setImportMessage] = useState("");
   const [importPreview, setImportPreview] = useState(null);
   const [playImportMessage, setPlayImportMessage] = useState("");
   const [playImportPreview, setPlayImportPreview] = useState(null);
+  const [catalogImportMessage, setCatalogImportMessage] = useState("");
+  const [catalogImportPreview, setCatalogImportPreview] = useState(null);
   const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
   const [resetSelection, setResetSelection] = useState(initialResetSelection);
 
@@ -111,6 +113,62 @@ export default function Admin() {
     setPlayImportMessage("");
   }
 
+
+  async function handleCatalogImport(event) {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    try {
+      const text = await readImportFileText(file);
+      const importedCatalogGames = parseCatalogImport(text, file.name);
+      const previewRows = buildCatalogImportPreview(importedCatalogGames, gameCatalog);
+      const importableCount = previewRows.filter((row) => row.status === "ready").length;
+
+      setCatalogImportPreview({
+        fileName: file.name,
+        games: importedCatalogGames,
+        rows: previewRows,
+      });
+      setCatalogImportMessage(
+        `${importedCatalogGames.length} Katalogspiele erkannt. ${importableCount} davon können importiert werden.`,
+      );
+    } catch (error) {
+      setCatalogImportPreview(null);
+      setCatalogImportMessage(error.message);
+    } finally {
+      event.target.value = "";
+    }
+  }
+
+  async function confirmCatalogImport() {
+    if (!catalogImportPreview) {
+      return;
+    }
+
+    try {
+      setCatalogImportMessage("Import läuft...");
+      const gamesToImport = catalogImportPreview.rows
+        .filter((row) => row.status === "ready")
+        .map((row) => catalogImportPreview.games[row.index]);
+      const addedCount = await addCatalogGames(gamesToImport);
+
+      setCatalogImportMessage(
+        `Import abgeschlossen: ${addedCount} von ${catalogImportPreview.games.length} Katalogspielen importiert.`,
+      );
+      setCatalogImportPreview(null);
+    } catch (error) {
+      setCatalogImportMessage(`Import fehlgeschlagen: ${error.message}`);
+    }
+  }
+
+  function cancelCatalogImport() {
+    setCatalogImportPreview(null);
+    setCatalogImportMessage("");
+  }
+
   function exportData(type, rows) {
     const content = JSON.stringify(rows, null, 2);
     const blob = new Blob([content], { type: "application/json" });
@@ -176,6 +234,13 @@ export default function Admin() {
                 Partienliste auswählen
               </label>
               <InfoIcon text="Unterstützt JSON oder CSV mit game/title, date, duration, scoringMode, participants und winner." />
+            </div>
+            <div className="admin-action-row">
+              <label className="file-upload">
+                <input accept=".json,.csv,text/csv,application/json" type="file" onChange={handleCatalogImport} />
+                Spielekatalog auswählen
+              </label>
+              <InfoIcon text="Ergänzt den zentralen Spielekatalog. Unterstützt JSON oder CSV. Empfohlene Spalten: name/title, germanTitle/deutscherTitel, bggId, year, minPlayers, maxPlayers, minPlayTime, maxPlayTime, playingTime, rank, rating, image, expansions. Bestehende Sammlungen werden nicht verändert." />
             </div>
           </div>
           {importMessage && <p className="form-message">{importMessage}</p>}
@@ -278,6 +343,57 @@ export default function Admin() {
               </div>
             </div>
           )}
+          {catalogImportMessage && <p className="form-message">{catalogImportMessage}</p>}
+          {catalogImportPreview && (
+            <div className="import-preview">
+              <div className="import-preview-header">
+                <div>
+                  <p className="eyebrow">Vorschau</p>
+                  <h3>{catalogImportPreview.fileName}</h3>
+                </div>
+                <div className="admin-actions inline-actions">
+                  <button className="button button-secondary" type="button" onClick={cancelCatalogImport}>
+                    Abbrechen
+                  </button>
+                  <button className="button" type="button" onClick={confirmCatalogImport}>
+                    Import bestätigen
+                  </button>
+                </div>
+              </div>
+              <div className="table-scroll">
+                <table className="compact-table">
+                  <thead>
+                    <tr>
+                      <th>Spiel</th>
+                      <th>Deutsch</th>
+                      <th>Jahr</th>
+                      <th>Spieler</th>
+                      <th>Spielzeit</th>
+                      <th>BGG</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {catalogImportPreview.rows.map((row) => (
+                      <tr key={`${row.index}-${row.name}`}>
+                        <td>{row.name || "Ohne Titel"}</td>
+                        <td>{row.germanTitle || "-"}</td>
+                        <td>{row.year || "-"}</td>
+                        <td>{row.minPlayers}-{row.maxPlayers}</td>
+                        <td>{row.playingTime || "-"}</td>
+                        <td>{row.bggId || "-"}</td>
+                        <td>
+                          <span className={`status-pill ${row.status === "ready" ? "status-active" : "status-muted"}`}>
+                            {row.message}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </article>
 
         <article className="panel">
@@ -316,6 +432,12 @@ export default function Admin() {
                 Partien löschen
               </Link>
               <InfoIcon text="Partien nach Spiel, Gewinner und Datum filtern und ausgewählte Einträge löschen." />
+            </div>
+            <div className="admin-action-row">
+              <Link className="button button-secondary" to="/admin/catalog">
+                Spielekatalog verwalten
+              </Link>
+              <InfoIcon text="Katalogspiele suchen, einzelne Einträge bearbeiten oder aus dem Katalog löschen." />
             </div>
           </div>
         </article>
@@ -698,6 +820,98 @@ function splitCsvLine(line, delimiter = ",") {
 
   values.push(value.trim());
   return values;
+}
+
+
+function parseCatalogImport(text, fileName) {
+  const rows = fileName.toLowerCase().endsWith(".json")
+    ? parseJsonRows(text, "gameCatalog")
+    : parseCsvGames(text);
+
+  return rows.map(normalizeImportedCatalogGame).filter((game) => game.name);
+}
+
+function buildCatalogImportPreview(importedCatalogGames, existingCatalogGames) {
+  const existingKeys = new Set(
+    existingCatalogGames.map((game) => `${game.bggId || ""}|${normalizeComparableTitle(game.name)}|${game.year || ""}`),
+  );
+
+  return importedCatalogGames.map((game, index) => {
+    const key = `${game.bggId || ""}|${normalizeComparableTitle(game.name)}|${game.year || ""}`;
+    const isDuplicate = existingKeys.has(key);
+
+    if (!isDuplicate) {
+      existingKeys.add(key);
+    }
+
+    return {
+      ...game,
+      index,
+      status: isDuplicate ? "duplicate" : "ready",
+      message: isDuplicate ? "Bereits im Katalog" : "Bereit",
+    };
+  });
+}
+
+function normalizeImportedCatalogGame(game) {
+  const minPlayTime =
+    Number(
+      getImportValue(game, [
+        "minPlayTime",
+        "min_play_time",
+        "Min. Dauer (Min.)",
+        "Min. Spieldauer (Min.)",
+        "duration",
+        "playingTime",
+      ]),
+    ) || 0;
+  const maxPlayTime =
+    Number(
+      getImportValue(game, [
+        "maxPlayTime",
+        "max_play_time",
+        "Max. Dauer (Min.)",
+        "Max. Spieldauer (Min.)",
+        "duration",
+        "playingTime",
+      ]),
+    ) || minPlayTime;
+
+  return {
+    id: getImportValue(game, ["id", "catalogId"]) ?? "",
+    bggId: getImportValue(game, ["bggId", "bgg_id", "BGG-ID"]) ?? null,
+    name: getImportValue(game, ["name", "title", "game", "Spielname"]) ?? "",
+    germanTitle: getImportValue(game, ["germanTitle", "deutscherTitel", "deutscher Titel", "Deutscher Titel", "Deutscher Spielname"]) ?? "",
+    year: getImportValue(game, ["year", "catalogYear", "Erscheinungsjahr"]) ?? "",
+    minPlayers: getImportValue(game, ["minPlayers", "min_players", "Min. Spieler"]) ?? 1,
+    maxPlayers:
+      getImportValue(game, ["maxPlayers", "max_players", "Max. Spieler"]) ??
+      getImportValue(game, ["minPlayers", "min_players", "Min. Spieler"]) ??
+      1,
+    minPlayTime,
+    maxPlayTime,
+    playingTime:
+      getImportValue(game, ["playingTime", "Spielzeit"]) ||
+      (maxPlayTime && minPlayTime !== maxPlayTime
+        ? `${minPlayTime}–${maxPlayTime} Min.`
+        : `${minPlayTime || maxPlayTime} Min.`),
+    rank: getImportValue(game, ["rank", "BGG-Rang"]) ?? null,
+    rating: getImportValue(game, ["rating", "Komplexität"]) ?? null,
+    image: getImportValue(game, ["image", "Bild", "Bild-URL"]) ?? null,
+    expansions: getImportValue(game, ["expansions", "Erweiterungen", "Erweiterungen (Snapshot)"]) ?? "",
+  };
+}
+
+function getImportValue(row, keys) {
+  for (const key of keys) {
+    const value = row[key];
+
+    if (value !== undefined && value !== null && value !== "") {
+      return value;
+    }
+  }
+
+  return null;
 }
 
 function normalizeImportedGame(game) {
