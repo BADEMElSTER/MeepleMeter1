@@ -25,6 +25,14 @@ function navigateWithPageTransition(navigate, route, direction) {
     });
 }
 
+function canLeaveCurrentPage() {
+  if (!window.__meepleMeterHasUnsavedPlay) {
+    return true;
+  }
+
+  return window.confirm("Ungespeicherte Punkte verwerfen?");
+}
+
 export default function AppLayout() {
   const { isAdmin, isAuthLoading, isFirebaseConfigured, logout, user, userProfile } =
     useAuth();
@@ -61,6 +69,11 @@ export default function AppLayout() {
       return;
     }
 
+    if (event.target.closest?.("input, textarea, select, button, .no-page-swipe")) {
+      touchStartRef.current = null;
+      return;
+    }
+
     const touch = event.touches[0];
     touchStartRef.current = {
       x: touch.clientX,
@@ -94,6 +107,10 @@ export default function AppLayout() {
     const nextRoute = swipeRoutes[nextIndex];
 
     if (nextRoute) {
+      if (!canLeaveCurrentPage()) {
+        return;
+      }
+
       navigateWithPageTransition(navigate, nextRoute, direction);
     }
   }

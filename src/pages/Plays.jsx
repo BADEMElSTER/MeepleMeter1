@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+import { useEffect, useState } from "react";
 import Field from "../components/Field.jsx";
 import GameLink from "../components/GameLink.jsx";
 import PlayerLink from "../components/PlayerLink.jsx";
@@ -22,7 +22,7 @@ function getScoringLabel(scoringMode) {
     return "Keine Punkte";
   }
 
-  return "HÃ¶chste Punktzahl gewinnt";
+  return "Höchste Punktzahl gewinnt";
 }
 
 export default function Plays() {
@@ -58,6 +58,42 @@ export default function Plays() {
     ? plays.filter((play) => hasParticipant(play, normalizedUsername))
     : [];
   const visiblePlays = playScope === "mine" ? ownPlays : plays;
+  const hasUnsavedPlayChanges = isFormOpen && isPlayFormDirty(form);
+
+  useEffect(() => {
+    window.__meepleMeterHasUnsavedPlay = hasUnsavedPlayChanges;
+
+    function handleBeforeUnload(event) {
+      if (!window.__meepleMeterHasUnsavedPlay) {
+        return;
+      }
+
+      event.preventDefault();
+      event.returnValue = "";
+    }
+
+    function handleLinkClick(event) {
+      const link = event.target.closest?.("a[href]");
+
+      if (!link || !window.__meepleMeterHasUnsavedPlay) {
+        return;
+      }
+
+      if (!window.confirm("Ungespeicherte Punkte verwerfen?")) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    }
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    document.addEventListener("click", handleLinkClick, true);
+
+    return () => {
+      window.__meepleMeterHasUnsavedPlay = false;
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      document.removeEventListener("click", handleLinkClick, true);
+    };
+  }, [hasUnsavedPlayChanges]);
 
   function getInitialForm(playerNames = knownPlayerNames, availableGames = games) {
     const defaultGame = availableGames[0];
@@ -126,7 +162,7 @@ export default function Plays() {
                   },
                 },
                 scoreCategories,
-                currentForm.participants.length,
+                currentForm.roundCount || currentForm.participants.length,
               ),
             }
           : participant,
@@ -167,7 +203,7 @@ export default function Plays() {
                   },
                 },
                 scoreCategories,
-                currentForm.participants.length,
+                currentForm.roundCount || currentForm.participants.length,
               ),
             }
           : participant,
@@ -248,6 +284,14 @@ export default function Plays() {
   }
 
   function closeForm() {
+    if (isPlayFormDirty(form) && !window.confirm("Ungespeicherte Punkte verwerfen?")) {
+      return;
+    }
+
+    resetForm();
+  }
+
+  function resetForm() {
     setIsFormOpen(false);
     setEditingPlayId(null);
     setNewPlayerName("");
@@ -260,7 +304,7 @@ export default function Plays() {
     event.preventDefault();
 
     if (!form.gameId || !form.participants.length) {
-      setFormError("Bitte wÃ¤hle mindestens einen Mitspieler aus.");
+      setFormError("Bitte wähle mindestens einen Mitspieler aus.");
       return;
     }
 
@@ -280,7 +324,7 @@ export default function Plays() {
         : form;
 
     if (formToSave.scoringMode !== "none" && hasMissingScores(formToSave.participants)) {
-      setFormError("Bitte trage f?r alle ausgew?hlten Mitspieler Punkte ein.");
+      setFormError("Bitte trage für alle ausgewählten Mitspieler Punkte ein.");
       return;
     }
 
@@ -290,11 +334,11 @@ export default function Plays() {
       addPlay(formToSave);
     }
 
-    closeForm();
+    resetForm();
   }
 
   function handleDelete(play) {
-    const confirmed = window.confirm(`Partie "${play.game}" vom ${new Date(play.date).toLocaleDateString("de-DE")} lÃ¶schen?`);
+    const confirmed = window.confirm(`Partie "${play.game}" vom ${new Date(play.date).toLocaleDateString("de-DE")} löschen?`);
 
     if (confirmed) {
       deletePlay(play.id);
@@ -352,13 +396,12 @@ export default function Plays() {
                 onChange={(event) => updateField("date", event.target.value)}
               />
             </Field>
-            <Field label="TatsÃ¤chliche Spielzeit in Minuten">
+            <Field label="Tatsächliche Spielzeit in Minuten">
               <input
                 min="0"
                 type="number"
                 value={form.duration}
                 onChange={(event) => updateField("duration", event.target.value)}
-                placeholder="75"
               />
             </Field>
             <Field label="Wertung">
@@ -366,7 +409,7 @@ export default function Plays() {
                 value={form.scoringMode}
                 onChange={(event) => updateField("scoringMode", event.target.value)}
               >
-                <option value="high">HÃ¶chste Punktzahl gewinnt</option>
+                <option value="high">Höchste Punktzahl gewinnt</option>
                 <option value="low">Niedrigste Punktzahl gewinnt</option>
                 <option value="placement">Platzierung eingeben</option>
                 <option value="none">Keine Punkte</option>
@@ -388,7 +431,7 @@ export default function Plays() {
                   type="checkbox"
                   onChange={(event) => updateField("useDetailedScoring", event.target.checked)}
                 />
-                Detaillierte Punktewertung fÃ¼r dieses Spiel nutzen
+                Detaillierte Punktewertung für dieses Spiel nutzen
               </label>
             )}
             <Field label="Notiz">
@@ -406,7 +449,7 @@ export default function Plays() {
                 <p className="eyebrow">Mitspieler</p>
                 <h3>Wer hat mitgespielt?</h3>
               </div>
-              <span>{form.participants.length} ausgewÃ¤hlt</span>
+              <span>{form.participants.length} ausgewählt</span>
             </div>
 
             <div className="participant-options">
@@ -496,7 +539,7 @@ export default function Plays() {
                 placeholder="Neuer Mitspieler"
               />
               <button className="button button-secondary" type="button" onClick={addPlayerName}>
-                HinzufÃ¼gen
+                Hinzufügen
               </button>
             </div>
 
@@ -528,7 +571,7 @@ export default function Plays() {
           {formError && <p className="form-message form-message-error">{formError}</p>}
 
           <button className="button" type="submit">
-            {editingPlayId ? "Ã„nderungen speichern" : "Partie speichern"}
+            {editingPlayId ? "Änderungen speichern" : "Partie speichern"}
           </button>
         </form>
       )}
@@ -594,7 +637,7 @@ export default function Plays() {
                           type="button"
                           onClick={() => handleDelete(play)}
                         >
-                          L?schen
+                          Löschen
                         </button>
                       </div>
                     </div>
@@ -655,7 +698,7 @@ export default function Plays() {
           <article className="play-card compact-play-card empty-play-card">
             <p>
               {playScope === "mine"
-                ? "FÃ¼r dich wurden noch keine Partien erfasst."
+                ? "Für dich wurden noch keine Partien erfasst."
                 : "Es wurden noch keine Partien erfasst."}
             </p>
           </article>
@@ -670,6 +713,31 @@ function hasMissingScores(participants) {
     const score = String(participant.score ?? "").trim();
     return score === "" || !Number.isFinite(Number(score));
   });
+}
+
+function isPlayFormDirty(form) {
+  if (!form) {
+    return false;
+  }
+
+  const hasParticipantScores = (form.participants ?? []).some((participant) => {
+    const hasScore = String(participant.score ?? "").trim() !== "";
+    const hasScoreDetails = Object.values(participant.scoreDetails ?? {}).some(
+      (value) => String(value ?? "").trim() !== "",
+    );
+    const hasRoundScores = Object.values(participant.roundScores ?? {}).some(
+      (value) => String(value ?? "").trim() !== "",
+    );
+
+    return hasScore || hasScoreDetails || hasRoundScores;
+  });
+
+  return (
+    hasParticipantScores ||
+    String(form.duration ?? "").trim() !== "" ||
+    String(form.note ?? "").trim() !== "" ||
+    String(form.winner ?? "").trim() !== ""
+  );
 }
 
 function hasParticipant(play, normalizedUsername) {
@@ -783,7 +851,7 @@ function ScoreDetailMatrix({
   const roundScoringLabel = roundScoringMode === "minus" ? "Minuspunkte" : "Punkte";
 
   return (
-    <div className="score-detail-matrix-wrap">
+    <div className="score-detail-matrix-wrap no-page-swipe">
       {categories.length > 0 && (
         <table className="score-detail-matrix">
           <thead>
@@ -823,7 +891,9 @@ function ScoreDetailMatrix({
             <tr>
               <th>Spiel ({roundScoringLabel})</th>
               {participants.map((participant) => (
-                <th key={participant.name}>{participant.name}</th>
+                <th key={participant.name}>
+                  <span>{participant.name}</span>
+                </th>
               ))}
             </tr>
           </thead>
@@ -982,5 +1052,7 @@ function sortSelectablePlayerNames(playerNames, selectedParticipants, plays, pre
     );
   });
 }
+
+
 
 

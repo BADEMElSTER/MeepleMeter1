@@ -1973,6 +1973,78 @@ th {
   margin: 0 0.75rem 0.75rem;
 }
 
+@media (max-width: 640px) {
+  .score-detail-matrix-wrap {
+    gap: 0.55rem;
+    overflow-x: auto;
+    border-radius: 0.85rem;
+  }
+
+  .round-score-matrix {
+    min-width: 0;
+    table-layout: fixed;
+  }
+
+  .round-score-matrix th,
+  .round-score-matrix td {
+    padding: 0.38rem 0.22rem;
+  }
+
+  .round-score-matrix thead th:first-child,
+  .round-score-matrix tbody th,
+  .round-score-matrix tfoot th {
+    width: 4.9rem;
+    overflow: hidden;
+    font-size: 0.58rem;
+    line-height: 1.05;
+    text-overflow: clip;
+    white-space: normal;
+    word-break: keep-all;
+  }
+
+  .round-score-matrix tfoot th {
+    font-size: 0;
+  }
+
+  .round-score-matrix tfoot th::after {
+    font-size: 0.58rem;
+    content: "Gesamt";
+  }
+
+  .round-score-matrix thead th:not(:first-child) {
+    height: 5.2rem;
+    padding: 0.25rem 0.1rem;
+    vertical-align: bottom;
+  }
+
+  .round-score-matrix thead th:not(:first-child) span {
+    display: inline-block;
+    max-height: 4.9rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    white-space: nowrap;
+  }
+
+  .round-score-matrix input {
+    min-width: 0;
+    padding: 0.42rem 0.15rem;
+    border-radius: 0.55rem;
+    font-size: 0.78rem;
+  }
+
+  .round-winner-trophy {
+    left: 0.15rem;
+    font-size: 0.68rem;
+  }
+
+  .add-round-block-button {
+    width: calc(100% - 1rem);
+    margin: 0 auto 0.6rem;
+  }
+}
+
 .score-detail-matrix input[type="checkbox"] {
   width: 1.15rem;
   min-width: 1.15rem;
